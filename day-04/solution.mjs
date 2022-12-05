@@ -22,11 +22,8 @@ function sumOverlappingSections(input) {
             .map(elves => elves
                 .split('-')
                 .map(n => parseInt(n, 10))), 0)
-        .reduce((sum, elves) => {
-            console.log(elves)
-            console.log(bothAreOverlapping(elves))
-            return (bothAreOverlapping(elves) || eitherIsFullyContained(elves)) ? sum + 1 : sum;
-        }, 0)
+        .reduce((sum, elves) =>
+            (bothAreOverlapping(elves) || eitherIsFullyContained(elves)) ? sum + 1 : sum, 0)
 }
 
 console.log(sumOverlappingSections(input))
