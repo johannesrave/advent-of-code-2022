@@ -9,8 +9,8 @@ function sumContainedSections(input) {
             .map(elves => elves
                 .split('-')
                 .map(n => parseInt(n, 10))), 0)
-        .reduce((sum, elves) =>
-            (eitherIsFullyContained(elves)) ? sum+1 : sum, 0)
+        .reduce((sum, sects) =>
+            (eitherIsFullyContained(sects)) ? sum+1 : sum, 0)
 }
 
 console.log(sumContainedSections(input))
@@ -22,18 +22,18 @@ function sumOverlappingSections(input) {
             .map(elves => elves
                 .split('-')
                 .map(n => parseInt(n, 10))), 0)
-        .reduce((sum, elves) =>
-            (bothAreOverlapping(elves) || eitherIsFullyContained(elves)) ? sum + 1 : sum, 0)
+        .reduce((sum, sects) =>
+            (bothAreOverlapping(sects) || eitherIsFullyContained(sects)) ? sum + 1 : sum, 0)
 }
 
 console.log(sumOverlappingSections(input))
 
-function eitherIsFullyContained(elves) {
-    return (elves[0][0] >= elves[1][0] && elves[0][1] <= elves[1][1]) ||
-        (elves[0][0] <= elves[1][0] && elves[0][1] >= elves[1][1]);
+function eitherIsFullyContained(sects) {
+    return (sects[0][0] >= sects[1][0] && sects[0][1] <= sects[1][1]) ||
+        (sects[0][0] <= sects[1][0] && sects[0][1] >= sects[1][1]);
 }
 
-function bothAreOverlapping(elves) {
-    return (elves[0][0] >= elves[1][0] && elves[0][0] <= elves[1][1]) ||
-        (elves[0][1] <= elves[1][1] && elves[0][1] >= elves[1][0]);
+function bothAreOverlapping(sects) {
+    return (sects[0][0] >= sects[1][0] && sects[0][0] <= sects[1][1]) ||
+        (sects[0][1] <= sects[1][1] && sects[0][1] >= sects[1][0]);
 }
