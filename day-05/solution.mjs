@@ -2,12 +2,13 @@ import fs from 'fs'
 
 const input = fs.readFileSync('input.txt', 'utf-8')
 
-function moveAllCrates(moves, stacks) {
-    moves.forEach(move => makeMove(move, stacks))
+function moveAllCrates(moves, stacks, moveFunc) {
+    moves.forEach(move => moveFunc(move, stacks))
     return [...stacks.values()].map((stack) => stack.pop()).join('')
 }
 
-console.log(moveAllCrates(parseMoves(input), parseStacks(input)))
+console.log(moveAllCrates(parseMoves(input), parseStacks(input), moveOneByOne))
+console.log(moveAllCrates(parseMoves(input), parseStacks(input), moveByStack))
 
 function parseMoves(input) {
     const rx = /^move (\d*) from (\d) to (\d)$/
@@ -31,10 +32,9 @@ function parseStacks(input) {
         .map((val, index) => matrix.map(row => row[row.length - 1 - index]))
         .reverse()
         .map(stack => stack.filter(crate => crate !== ' '))
-
 }
 
-function makeMove(move, stacks) {
+function moveOneByOne(move, stacks) {
     for (let m = move.amount; m > 0; m--) {
         const crate = stacks[move.start].pop()
         stacks[move.end].push(crate)
@@ -42,3 +42,12 @@ function makeMove(move, stacks) {
     return stacks
 }
 // CNSZFDVLJ
+
+function moveByStack(move, stacks) {
+    const movingCrates = stacks[move.start]
+        .splice(stacks[move.start].length-move.amount)
+    stacks[move.end].push(...movingCrates)
+    return stacks
+}
+
+// QNDWLMGNS
