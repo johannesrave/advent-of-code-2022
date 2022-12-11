@@ -1,4 +1,4 @@
-import * as fs from "fs";
+import * as fs from 'fs';
 
 const cdPattern = /^\$ cd ([a-zA-Z]\w*)$/;
 const cdUpPattern = /^\$ cd \.\.$/;
