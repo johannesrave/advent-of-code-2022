@@ -1,2 +1,5 @@
 .idea/
+node_modules
 log.txt
+/day-07/solution.js
+/day-07/solution.js.map
