@@ -4,7 +4,6 @@ const input = fs.readFileSync('input.txt', 'utf-8')
 
 console.log(findPlacesTouchedByTail(input))
 
-
 function findPlacesTouchedByTail(input: string) {
     const headMoves = parseInput(input)
     let headPos: Pos = {x: 0, y: 0}
@@ -14,10 +13,8 @@ function findPlacesTouchedByTail(input: string) {
     headMoves.forEach(({amt, dir}) => {
         for (let i = 0; i < amt; i++) {
             headPos = moveEnd(headPos, dir)
-            if (isTailMoveNecessary(tailPos, headPos)) {
-                tailPos = moveTowards(tailPos, headPos)
-                tailMoves = pushIfUnique(tailPos, tailMoves)
-            }
+            tailPos = moveIfNecessary(tailPos, headPos)
+            tailMoves = pushIfUnique(tailPos, tailMoves)
         }
     })
     return tailMoves.length
@@ -44,14 +41,7 @@ function moveEnd(ropeEnd: Pos, dir: Dir): Pos {
     }
 }
 
-function isTailMoveNecessary(tailPos: Pos, headPos: Pos) {
-    const vDist = headPos.x - tailPos.x
-    const hDist = headPos.y - tailPos.y
-    return (vDist > 1 || vDist < -1) || (hDist > 1 || hDist < -1)
-
-}
-
-function moveTowards(startPos: Pos, destPos: Pos) {
+function moveIfNecessary(startPos: Pos, destPos: Pos) {
     const hDist = destPos.x - startPos.x
     const vDist = destPos.y - startPos.y
 
@@ -64,6 +54,7 @@ function moveTowards(startPos: Pos, destPos: Pos) {
             return {x: destPos.x - 1, y: destPos.y}
         case hDist < -1:
             return {x: destPos.x + 1, y: destPos.y}
+        default: return startPos
     }
 }
 
