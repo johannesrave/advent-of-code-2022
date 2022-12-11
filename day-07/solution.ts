@@ -36,11 +36,9 @@ function parseDir(input: string[], index: number): [Dir, number] {
         const cdMatch = line.match(cdPattern)
         if (cdMatch) {
             const [, subDirName] = cdMatch
-
-            // skipping "$ ls" lines when parsing subDirs
             const [subDirTree, index] = parseDir(input, i + 1);
-            i = index
             dirTree.dirs[subDirName] = subDirTree
+            i = index
         }
 
         const fileMatch = line.match(filePattern)
