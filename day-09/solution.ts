@@ -2,21 +2,29 @@ import * as fs from 'fs';
 
 const input = fs.readFileSync('input.txt', 'utf-8')
 
-console.log(findPlacesTouchedByTail(input))
+console.assert(findPlacesTouchedByTail(input, 2) === 6175)
+console.assert(findPlacesTouchedByTail(input, 10) === 2578)
+console.log(findPlacesTouchedByTail(input, 10))
 
-function findPlacesTouchedByTail(input: string) {
+function findPlacesTouchedByTail(input: string, length: number) {
     const headMoves = parseInput(input)
-    let headPos: Pos = {x: 0, y: 0}
-    let tailPos: Pos = {x: 0, y: 0}
-    let tailMoves: Pos[] = [{x: 0, y: 0}]
+    let tail: Pos[] = Array(length).fill({x: 0, y: 0})
+    let tailMoves: Pos[] = []
 
     headMoves.forEach(({amt, dir}) => {
         for (let i = 0; i < amt; i++) {
-            headPos = moveEnd(headPos, dir)
-            tailPos = moveIfNecessary(tailPos, headPos)
-            tailMoves = pushIfUnique(tailPos, tailMoves)
+            for (const index of tail.keys()) {
+                if (index === 0) {
+                    tail[0] = moveHead(tail[0], dir)
+                } else {
+                    tail[index] = moveIfNecessary(tail[index], tail[index - 1])
+                }
+            }
+            console.log(JSON.stringify(tail))
+            tailMoves = pushIfUnique(tail[tail.length-1], tailMoves)
         }
     })
+    console.log(JSON.stringify(tailMoves))
     return tailMoves.length
 }
 
@@ -28,16 +36,16 @@ function parseInput(input: string) {
         })
 }
 
-function moveEnd(ropeEnd: Pos, dir: Dir): Pos {
+function moveHead(head: Pos, dir: Dir): Pos {
     switch (dir) {
         case "U":
-            return {x: ropeEnd.x, y: ropeEnd.y + 1}
+            return {x: head.x, y: head.y + 1}
         case "D":
-            return {x: ropeEnd.x, y: ropeEnd.y - 1}
+            return {x: head.x, y: head.y - 1}
         case "L":
-            return {x: ropeEnd.x - 1, y: ropeEnd.y}
+            return {x: head.x - 1, y: head.y}
         case "R":
-            return {x: ropeEnd.x + 1, y: ropeEnd.y}
+            return {x: head.x + 1, y: head.y}
     }
 }
 
@@ -46,6 +54,14 @@ function moveIfNecessary(startPos: Pos, destPos: Pos) {
     const vDist = destPos.y - startPos.y
 
     switch (true) {
+        case vDist > 1 && hDist > 1:
+            return {x: destPos.x - 1, y: destPos.y - 1}
+        case vDist > 1 && hDist < -1:
+            return {x: destPos.x + 1, y: destPos.y - 1}
+        case vDist < -1 && hDist > 1:
+            return {x: destPos.x - 1, y: destPos.y + 1}
+        case vDist < -1 && hDist < -1:
+            return {x: destPos.x + 1, y: destPos.y + 1}
         case vDist > 1:
             return {x: destPos.x, y: destPos.y - 1}
         case vDist < -1:
@@ -60,8 +76,9 @@ function moveIfNecessary(startPos: Pos, destPos: Pos) {
 
 function pushIfUnique(obj: Pos, arr: Pos[]) {
     const posExists = arr.findIndex((entry) => entry.x === obj.x && entry.y === obj.y) !== -1
-    if (!posExists)
+    if (!posExists) {
         arr.push(obj)
+    }
     return arr
 }
 
@@ -74,7 +91,8 @@ D 1
 L 5
 R 2`
 
-console.assert(findPlacesTouchedByTail(testRows) === 13)
+console.assert(findPlacesTouchedByTail(testRows, 2) === 13)
+console.assert(findPlacesTouchedByTail(testRows, 10) === 1)
 
 type Pos = {
     x: number,
