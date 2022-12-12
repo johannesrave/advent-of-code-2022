@@ -54,14 +54,14 @@ function moveIfNecessary(startPos: Pos, destPos: Pos) {
     const vDist = destPos.y - startPos.y
 
     switch (true) {
-        case vDist > 1 && hDist > 1:    return {x: destPos.x - 1, y: destPos.y - 1}
-        case vDist > 1 && hDist < -1:   return {x: destPos.x + 1, y: destPos.y - 1}
-        case vDist < -1 && hDist > 1:   return {x: destPos.x - 1, y: destPos.y + 1}
-        case vDist < -1 && hDist < -1:  return {x: destPos.x + 1, y: destPos.y + 1}
-        case vDist > 1:                 return {x: destPos.x, y: destPos.y - 1}
-        case vDist < -1:                return {x: destPos.x, y: destPos.y + 1}
-        case hDist > 1:                 return {x: destPos.x - 1, y: destPos.y}
-        case hDist < -1:                return {x: destPos.x + 1, y: destPos.y}
+        case vDist >  1 && hDist > 1:   return {x: destPos.x - 1,   y: destPos.y - 1}
+        case vDist >  1 && hDist < -1:  return {x: destPos.x + 1,   y: destPos.y - 1}
+        case vDist < -1 && hDist > 1:   return {x: destPos.x - 1,   y: destPos.y + 1}
+        case vDist < -1 && hDist < -1:  return {x: destPos.x + 1,   y: destPos.y + 1}
+        case vDist >  1:                return {x: destPos.x,       y: destPos.y - 1}
+        case vDist < -1:                return {x: destPos.x,       y: destPos.y + 1}
+        case hDist >  1:                return {x: destPos.x - 1,   y: destPos.y}
+        case hDist < -1:                return {x: destPos.x + 1,   y: destPos.y}
         default: return startPos
     }
 }
