@@ -16,26 +16,26 @@ console.assert(calculateMonkeyBusinessAndStayCool(input, INSANE_ROUNDS) === 2068
 function calculateMonkeyBusiness(input: string, numberOfRounds: number) {
     const monkeys = parseMonkeys(input);
 
-    while(numberOfRounds > 0){
+    while (numberOfRounds > 0) {
         monkeys.forEach(monkey => monkey.inspectAllItems(monkeys))
         numberOfRounds--
     }
 
     return monkeys.sort((a, b) => b.inspections - a.inspections)
-        .slice(0,2)
+        .slice(0, 2)
         .reduce((res, cur) => res * cur.inspections, 1)
 }
 
 function calculateMonkeyBusinessAndStayCool(input: string, numberOfRounds: number) {
     const monkeys = parseMonkeys(input);
 
-    while(numberOfRounds > 0){
+    while (numberOfRounds > 0) {
         monkeys.forEach(monkey => monkey.inspectAllItems(monkeys, monkey.inspectAndStayCool))
         numberOfRounds--
     }
 
     return monkeys.sort((a, b) => b.inspections - a.inspections)
-        .slice(0,2)
+        .slice(0, 2)
         .reduce((res, cur) => res * cur.inspections, 1)
 }
 
