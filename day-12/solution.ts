@@ -6,12 +6,18 @@ const input = fs.readFileSync('input.txt', 'utf-8')
 
 console.assert(findFewestStepsToTheTop(testInput) === 31)
 console.log(findFewestStepsToTheTop(testInput))
+
 console.log(findFewestStepsToTheTop(input))
 console.assert(findFewestStepsToTheTop(input) === 481)
 
-// 481 is the answer, but this fails - i don't know where
-// the fault lies, i always get 483 with an algo that works for the testinput.
+// 481 is the answer, but this fails - don't know where
+// the fault lies, this always returns 483 with an algo that works for the testinput.
 
+console.assert(findClosestValleyFromToTheTop(testInput) === 29)
+console.log(findClosestValleyFromToTheTop(testInput))
+
+console.log(findClosestValleyFromToTheTop(input))
+console.assert(findClosestValleyFromToTheTop(input) === 480)
 
 function findFewestStepsToTheTop(input: string) {
     const heightMap = input.split('\n')
@@ -19,15 +25,30 @@ function findFewestStepsToTheTop(input: string) {
 
     const board = addBorders(heightMap)
 
-    // console.log(board.map(row => row.map(s => (s.toString().padStart(3))).join("|")).join('\n'))
-
     const startValue = -1
     const startRow = board.findIndex(row => row.includes(startValue))
     const startCol = board[startRow].indexOf(startValue)
     const pos = {x: startCol, y: startRow, z: 0}
 
+    return findShortestPathStartingFrom(pos, board)
+}
+
+function findClosestValleyFromToTheTop(input: string) {
+    const heightMap = input.split('\n')
+        .map(row => row.split('').map(toHeight))
+
+    const board = addBorders(heightMap)
+    const valleys = board.map((row, y) => row
+        .reduce((valleys, cur, x) => (cur === 0) ? [...valleys, {x, y, z:cur}] : valleys, []))
+        .reduce((list, row) => [...list, ...row], [])
+
+    const set = new Set(valleys.map(valley => findShortestPathStartingFrom(valley, board)))
+    set.delete(-1)
+    return Math.min(...set)
+}
+
+function findShortestPathStartingFrom(pos: { x: number; y: number; z: number }, board: number[][]) {
     const visited = board.map(row => row.map(() => -1))
-    const comingFrom = board.map(row => row.map(() => ({x: 99, y: 99, z: 99})))
     visited[pos.y][pos.x] = 0
 
     const squaresToExplore = [pos]
@@ -47,19 +68,15 @@ function findFewestStepsToTheTop(input: string) {
 
         for (const square of candidates) {
             if (square.z === 26) {
-                return steps+1
+                return steps + 1
             }
             visited[square.y][square.x] = steps + 1
-            comingFrom[square.y][square.x] = pos
             squaresToExplore.push(square)
         }
         squaresToExplore.sort((a, b) => visited[a.y][a.x] - visited[b.y][b.x])
     } while (squaresToExplore.length)
-
-    // console.log(visited.map(row => row.map(s => (s.toString().padStart(3))).join("|")).join('\n'))
-    // console.log(comingFrom.map(row => row.map(s => (s.x.toString().padStart(3) + "." + s.y.toString().padStart(3))).join('|')).join('\n'))
-
     return -1
+
 }
 
 function addBorders(board: number[][]) {
