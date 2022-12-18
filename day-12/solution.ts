@@ -13,11 +13,11 @@ console.assert(findFewestStepsToTheTop(input) === 481)
 // 481 is the answer, but this fails - don't know where
 // the fault lies, this always returns 483 with an algo that works for the testinput.
 
-console.assert(findClosestValleyFromToTheTop(testInput) === 29)
-console.log(findClosestValleyFromToTheTop(testInput))
+console.assert(findClosestValleyToTheTop(testInput) === 29)
+console.log(findClosestValleyToTheTop(testInput))
 
-console.log(findClosestValleyFromToTheTop(input))
-console.assert(findClosestValleyFromToTheTop(input) === 480)
+console.log(findClosestValleyToTheTop(input))
+console.assert(findClosestValleyToTheTop(input) === 480)
 
 function findFewestStepsToTheTop(input: string) {
     const heightMap = input.split('\n')
@@ -33,7 +33,7 @@ function findFewestStepsToTheTop(input: string) {
     return findShortestPathStartingFrom(pos, board)
 }
 
-function findClosestValleyFromToTheTop(input: string) {
+function findClosestValleyToTheTop(input: string) {
     const heightMap = input.split('\n')
         .map(row => row.split('').map(toHeight))
 
