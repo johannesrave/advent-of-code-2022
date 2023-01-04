@@ -18,13 +18,13 @@ function getSandCapacityOverAbyss(input) {
     let [x, y] = entry;
     let capacity = 0
 
-    while (y <= ground && x > leftEdge && x < rightEdge) {
+    do {
         [x, y] = findNextRestingTile(cave, entry)
         if (y <= ground && x > leftEdge && x < rightEdge) {
             cave[y][x] = sand
             capacity++
         }
-    }
+    } while (y <= ground && x > leftEdge && x < rightEdge)
 
     return capacity
 }
