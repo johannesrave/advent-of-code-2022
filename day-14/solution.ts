@@ -14,43 +14,19 @@ function getSandCapacityOverAbyss(input) {
     const cave = parseCave(input);
     const {ground, rightEdge, leftEdge} = findBoundaries(cave);
 
-    printCave(cave)
-
     const entry = [500, 0]
     let [x, y] = entry;
     let capacity = 0
 
     while (y <= ground && x > leftEdge && x < rightEdge) {
-        [x, y] = findNextRestingTileWithoutOverflowing(cave, entry, ground, leftEdge, rightEdge)
+        [x, y] = findNextRestingTileWithoutClogging(cave, entry)
         if (y <= ground && x > leftEdge && x < rightEdge) {
             cave[y][x] = sand
             capacity++
         }
     }
 
-    printCave(cave)
     return capacity
-}
-
-function findNextRestingTileWithoutOverflowing(cave: Record<number, string[]>, start: number[], ground: number, leftEdge: number, rightEdge: number) {
-    let [x, y] = start
-    let tileBelow = typeof cave[y + 1][x] === 'undefined'
-    let tileLeftBelow = typeof cave[y + 1][x - 1] === 'undefined'
-    let tileRightBelow = typeof cave[y + 1][x + 1] === 'undefined'
-    while ((tileBelow || tileLeftBelow || tileRightBelow) && (y <= ground) && (x > leftEdge) && (x < rightEdge)) {
-        y++
-        if (tileBelow) {
-
-        } else if (tileLeftBelow) {
-            x--
-        } else if (tileRightBelow) {
-            x++
-        }
-        tileBelow = typeof cave[y + 1][x] === 'undefined'
-        tileLeftBelow = typeof cave[y + 1][x - 1] === 'undefined'
-        tileRightBelow = typeof cave[y + 1][x + 1] === 'undefined'
-    }
-    return [x, y]
 }
 
 function getSandCapacityWithGround(input) {
@@ -60,31 +36,26 @@ function getSandCapacityWithGround(input) {
     cave[ground + 1] = []
     cave[ground + 2] = Array(670).fill(stone, 330)
 
-    // printCave(cave)
-
     const entry = [500, 0]
     let [x, y] = entry;
     let capacity = 0
 
-    do {
+    while (cave[entry[1]][entry[0]] !== sand) {
         [x, y] = findNextRestingTileWithoutClogging(cave, entry)
-            cave[y][x] = sand
-            capacity++
-    } while (
-        cave[entry[1] + 1][entry[0]] !== sand ||
-        cave[entry[1] + 1][entry[0] - 1] !== sand ||
-        cave[entry[1] + 1][entry[0] + 1] !== sand)
+        cave[y][x] = sand
+        capacity++
+    }
 
-    // printCave(cave)
-    return ++capacity
+    return capacity
 }
 
 function findNextRestingTileWithoutClogging(cave: Record<number, string[]>, start: number[]) {
     let [x, y] = start
+    const ground = Math.max(...Object.keys(cave).map(n => parseInt(n)))
     let tileBelow = typeof cave[y + 1][x] === 'undefined'
     let tileLeftBelow = typeof cave[y + 1][x - 1] === 'undefined'
     let tileRightBelow = typeof cave[y + 1][x + 1] === 'undefined'
-    do {
+    while ((tileBelow || tileLeftBelow || tileRightBelow) && y < ground-1) {
         y++
         if (tileBelow) {
 
@@ -96,7 +67,7 @@ function findNextRestingTileWithoutClogging(cave: Record<number, string[]>, star
         tileBelow = typeof cave[y + 1][x] === 'undefined'
         tileLeftBelow = typeof cave[y + 1][x - 1] === 'undefined'
         tileRightBelow = typeof cave[y + 1][x + 1] === 'undefined'
-    } while ((tileBelow || tileLeftBelow || tileRightBelow))
+    }
     return [x, y]
 }
 
@@ -144,19 +115,6 @@ function parseCave(input): Record<number, string[]> {
     return cave
 }
 
-function printCave(_cave) {
-    const cave = structuredClone(_cave)
-    // const cave = JSON.parse(JSON.stringify(_cave))
-    const {leftEdge, rightEdge, ground} = findBoundaries(cave)
-    for (let i = 0; i <= ground; i++) {
-        for (let j = leftEdge; j <= rightEdge; j++) {
-            cave[i][j] = cave[i][j] ?? air
-        }
-    }
-    Object.entries(cave)
-        .forEach(([k, v]: [string, string[]]) => console.log(k.padStart(3) + ": " + v.join('')))
-}
-
 function findBoundaries(cave) {
     let leftEdge = Number.MAX_SAFE_INTEGER
     let rightEdge = 0
@@ -172,13 +130,22 @@ function findBoundaries(cave) {
     return {ground, leftEdge, rightEdge}
 }
 
+function printCave(_cave) {
+    const cave = structuredClone(_cave)
+    const {leftEdge, rightEdge, ground} = findBoundaries(cave)
+    for (let i = 0; i <= ground; i++) {
+        for (let j = leftEdge; j <= rightEdge; j++) {
+            cave[i][j] = cave[i][j] ?? air
+        }
+    }
+    Object.entries(cave)
+        .forEach(([k, v]: [string, string[]]) => console.log(k.padStart(3) + ": " + v.join('')))
+}
+
 console.assert(getSandCapacityOverAbyss(testInput) === 24)
 console.log(getSandCapacityOverAbyss(input))
 console.assert(getSandCapacityOverAbyss(input) === 578)
-//
+
 console.assert(getSandCapacityWithGround(testInput) === 93)
 console.log(getSandCapacityWithGround(testInput))
-console.log(getSandCapacityWithGround(input))
-
-// console.assert(getSandCapacityWhenFilled(testInput) === 93)
-// console.log(getSandCapacityWhenFilled(input))
+console.assert(getSandCapacityWithGround(input) === 24377)
