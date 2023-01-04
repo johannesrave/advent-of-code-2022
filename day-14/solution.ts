@@ -73,37 +73,34 @@ function parseCave(input): Record<number, string[]> {
     const firstRow = []
     firstRow[500] = entry
     const cave: Record<number, string[]> = {0: firstRow}
-    let leftEdge = Number.MAX_SAFE_INTEGER
-    let rightEdge = 0
-    const stoneCoords: [number, number][][] = input.split('\n')
+
+    input.split('\n')
         .map((line: string) => line
             .split(' -> ')
             .map(xy => xy
                 .split(',')
-                .map(c => parseInt(c))))
-
-    stoneCoords.forEach(set => set.forEach((xy: [number, number], i, coords) => {
-        if (i === 0) return
-        const [ax, ay] = coords[i - 1]
-        const [bx, by] = coords[i]
-        leftEdge = (leftEdge > Math.min(ax, bx)) ? Math.min(ax, bx) : leftEdge
-        rightEdge = (rightEdge < Math.max(ax, bx)) ? Math.max(ax, bx) : rightEdge
-        if (ay === by) {
-            if (typeof cave[ay] === 'undefined') {
-                cave[ay] = []
-            }
-            for (let x = Math.min(ax, bx); x <= Math.max(ax, bx); x++) {
-                cave[ay][x] = stone
-            }
-        } else if (ax === bx) {
-            for (let y = Math.min(ay, by); y <= Math.max(ay, by); y++) {
-                if (typeof cave[y] === 'undefined') {
-                    cave[y] = []
+                .map(c => parseInt(c))            )
+            .forEach((xy: [number, number], i, coords) => {
+                if (i === 0) return
+                const [ax, ay] = coords[i - 1]
+                const [bx, by] = coords[i]
+                if (ay === by) {
+                    if (typeof cave[ay] === 'undefined') {
+                        cave[ay] = []
+                    }
+                    for (let x = Math.min(ax, bx); x <= Math.max(ax, bx); x++) {
+                        cave[ay][x] = stone
+                    }
+                } else if (ax === bx) {
+                    for (let y = Math.min(ay, by); y <= Math.max(ay, by); y++) {
+                        if (typeof cave[y] === 'undefined') {
+                            cave[y] = []
+                        }
+                        cave[y][ax] = stone
+                    }
                 }
-                cave[y][ax] = stone
-            }
-        }
-    }))
+            }))
+
     const ground = Math.max(...Object.keys(cave).map(n => parseInt(n)))
 
     for (let i = 0; i <= ground; i++) {
