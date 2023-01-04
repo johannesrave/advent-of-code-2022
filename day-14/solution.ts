@@ -19,7 +19,7 @@ function getSandCapacityOverAbyss(input) {
     let capacity = 0
 
     while (y <= ground && x > leftEdge && x < rightEdge) {
-        [x, y] = findNextRestingTileWithoutClogging(cave, entry)
+        [x, y] = findNextRestingTile(cave, entry)
         if (y <= ground && x > leftEdge && x < rightEdge) {
             cave[y][x] = sand
             capacity++
@@ -41,7 +41,7 @@ function getSandCapacityWithGround(input) {
     let capacity = 0
 
     while (cave[entry[1]][entry[0]] !== sand) {
-        [x, y] = findNextRestingTileWithoutClogging(cave, entry)
+        [x, y] = findNextRestingTile(cave, entry)
         cave[y][x] = sand
         capacity++
     }
@@ -49,7 +49,7 @@ function getSandCapacityWithGround(input) {
     return capacity
 }
 
-function findNextRestingTileWithoutClogging(cave: Record<number, string[]>, start: number[]) {
+function findNextRestingTile(cave: Record<number, string[]>, start: number[]) {
     let [x, y] = start
     const ground = Math.max(...Object.keys(cave).map(n => parseInt(n)))
     let tileBelow = typeof cave[y + 1][x] === 'undefined'
