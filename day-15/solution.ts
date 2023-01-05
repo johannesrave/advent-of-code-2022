@@ -1,50 +1,50 @@
 import * as fs from 'fs';
-import {Beacon, Cave, ScannedTile, Sensor, Tile} from "./cave.js";
 
 const testInput = fs.readFileSync('test_input.txt', 'utf-8');
 const input = fs.readFileSync('input.txt', 'utf-8');
 
-function parseSensors(input) {
-    return input.split('\n').map(line => {
+function work(input, rowToScan: number) {
+    const knownTiles = input.split('\n').map(line => {
         const [, sensorX, sensorY, beaconX, beaconY] = line
             .match(/Sensor at x=(-?\d+), y=(-?\d+): closest beacon is at x=(-?\d+), y=(-?\d+)/)
-        return new Sensor(
-            {x: parseInt(sensorX), y: parseInt(sensorY)},
-            new Beacon({x: parseInt(beaconX), y: parseInt(beaconY)})
-        )
-    })
-}
-
-function buildCave(sensors: Sensor[]) {
-    const cave: Cave = {}
-
-    const occupiedTiles = [
-        ...sensors,
-        ...sensors.map(s => s.scan()).flat(),
-        ...sensors.map(s => s.closestBeacon)
-    ]
-
-    const mapOfMaps = new Map<number, Map<number, Tile>>();
-    occupiedTiles.forEach((tile) => {
-        const {x, y} = tile.pos
-
-        if (!mapOfMaps.has(y)) {
-
-            mapOfMaps.set(y, new Map())
+        const range = Math.abs(sensorX - beaconX) + Math.abs(sensorY - beaconY)
+        return {
+            sensor: {x: parseInt(sensorX), y: parseInt(sensorY), range},
+            beacon: {x: parseInt(beaconX), y: parseInt(beaconY)}
         }
-        mapOfMaps.get(y).set(x, tile)
     })
-    return [...mapOfMaps.entries()]
-        .sort(([a],[b]) => a-b)
-        .map(([y, row]: [number, Map<number, Tile>]): [number, [number, Tile][]]  =>
-            [y, [...row.entries()].sort(([a],[b]) => a-b)])
+
+    const sensors: { x: number, y: number, range: number }[] = knownTiles
+        .map(tile => tile.sensor)
+        .filter(s => s.range >= Math.abs(s.y - rowToScan))
+
+    const beaconsOnScannedRow: { x: number, y: number }[] = knownTiles
+        .map((tile): { x: number, y: number } => tile.beacon)
+        .filter((b) => b.y === rowToScan)
+        .filter((b, i, beacons: { x: number, y: number }[]) => beacons.findIndex(_b => _b.x === b.x) === i)
+
+    const leftmostScannedTile = sensors.reduce((min, sensor) => {
+        const minX = sensor.x - sensor.range + Math.abs(sensor.y - rowToScan)
+        return (minX < min) ? minX : min
+    }, Number.MAX_SAFE_INTEGER)
+
+    const rightmostScannedTile = sensors.reduce((max, sensor) => {
+        const maxX = sensor.x + sensor.range - Math.abs(sensor.y - rowToScan)
+        return (maxX > max) ? maxX : max
+    }, Number.MIN_SAFE_INTEGER)
+
+    let tilesInRange = 0
+    for (let x = leftmostScannedTile; x <= rightmostScannedTile; x++) {
+        if (sensors.find(s => Math.abs(s.y - rowToScan) + Math.abs(s.x - x) <= s.range)) {
+            tilesInRange++
+        }
+    }
+
+    return tilesInRange - beaconsOnScannedRow.length
 }
 
+console.log(work(testInput, 10))
+console.assert(work(testInput, 10) === 26)
 
-const s = new Sensor({x: 0, y: 11}, new Beacon({x: 2, y: 10}))
-
-const obj = buildCave(parseSensors(input));
-console.log(obj)
-const row = obj.find(([y]) => y === 2000000);
-console.log(row[1].length)
-console.log(row[1].filter(([x, tile]) => tile instanceof ScannedTile).length)
+console.log(work(input, 2000_000))
+// 6263574 is too high
