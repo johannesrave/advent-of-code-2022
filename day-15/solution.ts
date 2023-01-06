@@ -15,15 +15,11 @@ function findScannedTilesOnRow(input, rowToScan: number) {
         .filter((b) => b.y === rowToScan)
         .filter((b, i, beacons: { x: number, y: number }[]) => beacons.findIndex(_b => _b.x === b.x) === i)
 
-    const leftmostScannedTile = sensors.reduce((min, sensor) => {
-        const minX = sensor.x - sensor.range + Math.abs(sensor.y - rowToScan)
-        return (minX < min) ? minX : min
-    }, Number.MAX_SAFE_INTEGER)
+    const leftmostScannedTile = Math.min(
+        ...sensors.map((sensor) => sensor.x - sensor.range + Math.abs(sensor.y - rowToScan)))
 
-    const rightmostScannedTile = sensors.reduce((max, sensor) => {
-        const maxX = sensor.x + sensor.range - Math.abs(sensor.y - rowToScan)
-        return (maxX > max) ? maxX : max
-    }, Number.MIN_SAFE_INTEGER)
+    const rightmostScannedTile = Math.max(
+        ...sensors.map((sensor) => sensor.x + sensor.range - Math.abs(sensor.y - rowToScan)))
 
     let tilesInRange = 0
     for (let x = leftmostScannedTile; x <= rightmostScannedTile; x++) {
