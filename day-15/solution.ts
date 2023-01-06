@@ -41,9 +41,7 @@ function findMissingBeaconInRange(input, bounds: number) {
     search: for (let y = 0; y < bounds; y++) {
         for (let x = 0; x <= bounds; x++) {
             const additionalRanges = sensors
-                .map(s => {
-                    return s.range - (Math.abs(s.y - y) + Math.abs(s.x - x))
-                })
+                .map(s => s.range - (Math.abs(s.y - y) + Math.abs(s.x - x)))
                 .filter(range => range >= 0)
 
             if (additionalRanges.length > 0) {
