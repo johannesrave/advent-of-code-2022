@@ -4,15 +4,7 @@ const testInput = fs.readFileSync('test_input.txt', 'utf-8');
 const input = fs.readFileSync('input.txt', 'utf-8');
 
 function findScannedTilesOnRow(input, rowToScan: number) {
-    const knownTiles = input.split('\n').map(line => {
-        const [, sensorX, sensorY, beaconX, beaconY] = line
-            .match(/Sensor at x=(-?\d+), y=(-?\d+): closest beacon is at x=(-?\d+), y=(-?\d+)/)
-        const range = Math.abs(sensorX - beaconX) + Math.abs(sensorY - beaconY)
-        return {
-            sensor: {x: parseInt(sensorX), y: parseInt(sensorY), range},
-            beacon: {x: parseInt(beaconX), y: parseInt(beaconY)}
-        }
-    })
+    const knownTiles = parse(input)
 
     const sensors: { x: number, y: number, range: number }[] = knownTiles
         .map(tile => tile.sensor)
@@ -44,15 +36,7 @@ function findScannedTilesOnRow(input, rowToScan: number) {
 }
 
 function findMissingBeaconInRange(input, bounds: number) {
-    const knownTiles = input.split('\n').map(line => {
-        const [, sensorX, sensorY, beaconX, beaconY] = line
-            .match(/Sensor at x=(-?\d+), y=(-?\d+): closest beacon is at x=(-?\d+), y=(-?\d+)/)
-        const range = Math.abs(sensorX - beaconX) + Math.abs(sensorY - beaconY)
-        return {
-            sensor: {x: parseInt(sensorX), y: parseInt(sensorY), range},
-            beacon: {x: parseInt(beaconX), y: parseInt(beaconY)}
-        }
-    })
+    const knownTiles = parse(input)
 
     const sensors: { x: number, y: number, range: number }[] = knownTiles
         .map(tile => tile.sensor)
@@ -80,9 +64,22 @@ function findMissingBeaconInRange(input, bounds: number) {
     return x * 4_000_000 + y
 }
 
+function parse(input) {
+    return input.split('\n').map(line => {
+        const [, sensorX, sensorY, beaconX, beaconY] = line
+            .match(/Sensor at x=(-?\d+), y=(-?\d+): closest beacon is at x=(-?\d+), y=(-?\d+)/)
+        const range = Math.abs(sensorX - beaconX) + Math.abs(sensorY - beaconY)
+        return {
+            sensor: {x: parseInt(sensorX), y: parseInt(sensorY), range},
+            beacon: {x: parseInt(beaconX), y: parseInt(beaconY)}
+        }
+    });
+}
+
 console.assert(findScannedTilesOnRow(testInput, 10) === 26)
 console.log(findScannedTilesOnRow(input, 2_000_000))
 console.assert(findScannedTilesOnRow(input, 2_000_000) === 5525990)
 
 console.assert(findMissingBeaconInRange(testInput, 20) === 56000011)
 console.log(findMissingBeaconInRange(input, 4_000_000))
+// console.assert(findMissingBeaconInRange(input, 4_000_000) === 11756174628223)
