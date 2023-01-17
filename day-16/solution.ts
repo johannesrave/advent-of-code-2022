@@ -1,65 +1,137 @@
 import * as fs from 'fs';
-import {Worker} from 'worker_threads';
 
 const testInput = fs.readFileSync('test_input.txt', 'utf-8');
-const input = fs.readFileSync('input.txt', 'utf-8');
-
-export type Valve = {
-    valve: string,
-    flow: number,
-    tunnels: string[],
-    open: boolean
-}
-
 const testValves: Map<string, Valve> = parse(testInput)
+
+const input = fs.readFileSync('input.txt', 'utf-8');
+const valves: Map<string, Valve> = parse(input)
 
 console.assert(testValves.get('AA'))
 console.assert(testValves.get('AA').valve === 'AA')
 console.assert(testValves.get('AA').flow === 0)
 console.assert(testValves.get('AA').tunnels.includes('DD'))
 console.assert(testValves.get('DD'))
-console.log(testValves)
+console.assert(findShortestPath(testValves, 'AA', 'DD') === 1)
+console.assert(findShortestPath(testValves, 'AA', 'JJ') === 2)
+console.assert(findShortestPath(testValves, 'AA', 'CC') === 2)
+console.assert(findShortestPath(testValves, 'AA', 'HH') === 5)
 
-// const testPaths = traverse(testValves, 'AA');
-// console.log(JSON.stringify(testPaths, null, 2))
+const afterFirstMove = advanceState({
+    position: 'AA',
+    roundsLeft: 30,
+    flowPerRound: 0,
+    unvisitedValves: new Set(['BB', 'CC', 'DD', 'EE', 'HH', 'JJ']),
+    pressureReleased: 0
+}, testValves);
+const firstState = afterFirstMove.find(state => state.position === 'DD');
+console.assert(firstState.roundsLeft === 28)
+console.assert(firstState.flowPerRound === 20)
+console.assert(firstState.pressureReleased === 0)
 
-const testPathsParallel = startTraversal(testValves, 'AA')
+const afterSecondMove = advanceState(firstState, testValves);
+const secondState = afterSecondMove.find(state => state.position === 'BB');
+console.assert(secondState.roundsLeft === 25)
+console.assert(secondState.flowPerRound === 33)
+console.assert(secondState.pressureReleased === 60)
+// console.log(afterSecondMove)
 
-async function startTraversal(_valves: Map<string, Valve>, _valve: string, path = [], rounds = 10) {
-    const valve = _valves.get(_valve)
-    path = [valve.valve]
+const afterThirdMove = advanceState(secondState, testValves);
+const thirdState = afterThirdMove.find(state => state.position === 'JJ');
+console.assert(thirdState.roundsLeft === 21)
+console.assert(thirdState.flowPerRound === 54)
+console.assert(thirdState.pressureReleased === 192)
+// console.log(afterThirdMove)
 
-    const threads = []
-    for (const tunnel of valve.tunnels) {
-        const nextValve = _valves.get(tunnel)
-        const valvesLeft = structuredClone(_valves)
+const afterFourthMove = advanceState(thirdState, testValves);
+const fourthState = afterFourthMove.find(state => state.position === 'HH');
+console.assert(fourthState.roundsLeft === 13)
+console.assert(fourthState.flowPerRound === 76)
+console.assert(fourthState.pressureReleased === 624)
+console.log(afterFourthMove)
 
-        threads.push(new Promise((resolve) => {
-            const worker = new Worker('./worker.js');
-            worker.postMessage({_valves: valvesLeft, _valve: nextValve.valve, path, rounds: rounds - 2})
+console.assert(main(testValves, 'AA') === 1651)
 
-            worker.on('message', (value) => {
-                console.log("received value")
-                void worker.terminate()
-                return resolve(value)
-            });
+// console.log(main(testValves, 'AA', 6))
+// console.log(testValves)
+console.log(main(valves, 'AA'))
 
-        }))
-        // paths.push(traverse(valvesLeft, nextValve.valve, path, rounds - 2))
-        // pressureReleased.push([tunnel, traverse(valveLeft, nextValve.valve, path, rounds - 1)])
+
+function main(_valves: Map<string, Valve>, _start: string, _rounds = 30) {
+
+    const closedValvesWithFlow = new Set([..._valves.values()].filter(v => v.flow > 0 && !v.open).map(v => v.valve))
+    const startingState = {
+        position: _start,
+        roundsLeft: _rounds,
+        flowPerRound: 0,
+        unvisitedValves: closedValvesWithFlow,
+        pressureReleased: 0
     }
 
-    // for (const tunnel of valve.tunnels) {
-    //     const nextValve = _valves.get(tunnel)
-    //     const valveLeft = structuredClone(_valves)
-    //     pressureReleased.push([tunnel, traverse(valveLeft, nextValve.valve, rounds - 1)])
-    // }
+    console.log(closedValvesWithFlow)
+    const finalStates = []
+    let queue = advanceState(startingState, _valves)
+    let counter = closedValvesWithFlow.size - 1
 
-    const paths = await Promise.all(threads)
-    console.log(paths.flat(6))
+    while (counter > 0 && queue.length > 0) {
+        counter--
+        const _queue = queue.map(state => advanceState(state, _valves)).flat()
+        queue = []
+        for (const state of _queue) {
+            if (state.roundsLeft === 0){
+                finalStates.push(state)
+            } else  {
+                queue.push(state)
+            }
+        }
+    }
 
-    // console.log(paths.flat(8).map(s => s.join('')))
-    return paths
+    finalStates.push(...queue)
+
+    const pressures = finalStates.map(state => state.pressureReleased + (state.flowPerRound * state.roundsLeft))
+    const [maxPressure] = [...pressures].sort((a,b) => b-a)
+    return maxPressure
+}
+
+function advanceState(state: State, _valves: Map<string, Valve>): State[] {
+    const {unvisitedValves: _unvisitedValves, roundsLeft, position, flowPerRound, pressureReleased} = state;
+    return [..._unvisitedValves.values()].map(target => {
+            const unvisitedValves = structuredClone(_unvisitedValves);
+            unvisitedValves.delete(target)
+            const roundsNeeded = findShortestPath(_valves, position, target);
+            if (roundsLeft < roundsNeeded){
+                return {
+                    position,
+                    roundsLeft: 0,
+                    flowPerRound,
+                    unvisitedValves: _unvisitedValves,
+                    pressureReleased: pressureReleased + flowPerRound * roundsLeft
+                }
+            } else {
+                return {
+                    position: target,
+                    roundsLeft: roundsLeft - roundsNeeded - 1,
+                    flowPerRound: flowPerRound + _valves.get(target).flow,
+                    unvisitedValves: unvisitedValves,
+                    pressureReleased: pressureReleased + (flowPerRound * (roundsNeeded + 1))
+                }
+            }
+        }
+    )
+}
+
+
+function findShortestPath(_valves: Map<string, Valve>, _start: string, _target: string) {
+    const visited = new Set()
+
+    let steps = 1
+    let valves = [..._valves.get(_start).tunnels]
+    while (valves.length > 0) {
+        if (valves.includes(_target)) return steps
+        steps++
+        valves = valves.map(v => _valves.get(v).tunnels.filter(t => !visited.has(t))).flat()
+        valves.forEach(t => visited.add(t))
+    }
+    return -1
 }
 
 function parse(input): Map<string, Valve> {
@@ -71,3 +143,17 @@ function parse(input): Map<string, Valve> {
     }, new Map());
 }
 
+export type Valve = {
+    valve: string,
+    flow: number,
+    tunnels: string[],
+    open: boolean
+}
+
+export type State = {
+    position: string,
+    roundsLeft: number,
+    flowPerRound: number,
+    pressureReleased: number,
+    unvisitedValves: Set<string>
+}
