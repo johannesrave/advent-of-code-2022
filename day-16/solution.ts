@@ -1,62 +1,4 @@
-import * as fs from 'fs';
-
-const testInput = fs.readFileSync('test_input.txt', 'utf-8');
-const testValves: Map<string, Valve> = parse(testInput)
-
-const input = fs.readFileSync('input.txt', 'utf-8');
-const valves: Map<string, Valve> = parse(input)
-
-console.assert(testValves.get('AA'))
-console.assert(testValves.get('AA').valve === 'AA')
-console.assert(testValves.get('AA').flow === 0)
-console.assert(testValves.get('AA').tunnels.includes('DD'))
-console.assert(testValves.get('DD'))
-console.assert(findShortestPath(testValves, 'AA', 'DD') === 1)
-console.assert(findShortestPath(testValves, 'AA', 'JJ') === 2)
-console.assert(findShortestPath(testValves, 'AA', 'CC') === 2)
-console.assert(findShortestPath(testValves, 'AA', 'HH') === 5)
-
-const afterFirstMove = advanceState({
-    position: 'AA',
-    roundsLeft: 30,
-    flowPerRound: 0,
-    unvisitedValves: new Set(['BB', 'CC', 'DD', 'EE', 'HH', 'JJ']),
-    pressureReleased: 0
-}, testValves);
-const firstState = afterFirstMove.find(state => state.position === 'DD');
-console.assert(firstState.roundsLeft === 28)
-console.assert(firstState.flowPerRound === 20)
-console.assert(firstState.pressureReleased === 0)
-
-const afterSecondMove = advanceState(firstState, testValves);
-const secondState = afterSecondMove.find(state => state.position === 'BB');
-console.assert(secondState.roundsLeft === 25)
-console.assert(secondState.flowPerRound === 33)
-console.assert(secondState.pressureReleased === 60)
-// console.log(afterSecondMove)
-
-const afterThirdMove = advanceState(secondState, testValves);
-const thirdState = afterThirdMove.find(state => state.position === 'JJ');
-console.assert(thirdState.roundsLeft === 21)
-console.assert(thirdState.flowPerRound === 54)
-console.assert(thirdState.pressureReleased === 192)
-// console.log(afterThirdMove)
-
-const afterFourthMove = advanceState(thirdState, testValves);
-const fourthState = afterFourthMove.find(state => state.position === 'HH');
-console.assert(fourthState.roundsLeft === 13)
-console.assert(fourthState.flowPerRound === 76)
-console.assert(fourthState.pressureReleased === 624)
-console.log(afterFourthMove)
-
-console.assert(main(testValves, 'AA') === 1651)
-
-// console.log(main(testValves, 'AA', 6))
-// console.log(testValves)
-console.log(main(valves, 'AA'))
-
-
-function main(_valves: Map<string, Valve>, _start: string, _rounds = 30) {
+export function main(_valves: Map<string, Valve>, _start: string, _rounds = 30) {
 
     const closedValvesWithFlow = new Set([..._valves.values()].filter(v => v.flow > 0 && !v.open).map(v => v.valve))
     const startingState = {
@@ -77,9 +19,9 @@ function main(_valves: Map<string, Valve>, _start: string, _rounds = 30) {
         const _queue = queue.map(state => advanceState(state, _valves)).flat()
         queue = []
         for (const state of _queue) {
-            if (state.roundsLeft === 0){
+            if (state.roundsLeft === 0) {
                 finalStates.push(state)
-            } else  {
+            } else {
                 queue.push(state)
             }
         }
@@ -88,17 +30,17 @@ function main(_valves: Map<string, Valve>, _start: string, _rounds = 30) {
     finalStates.push(...queue)
 
     const pressures = finalStates.map(state => state.pressureReleased + (state.flowPerRound * state.roundsLeft))
-    const [maxPressure] = [...pressures].sort((a,b) => b-a)
+    const [maxPressure] = [...pressures].sort((a, b) => b - a)
     return maxPressure
 }
 
-function advanceState(state: State, _valves: Map<string, Valve>): State[] {
+export function advanceState(state: State, _valves: Map<string, Valve>): State[] {
     const {unvisitedValves: _unvisitedValves, roundsLeft, position, flowPerRound, pressureReleased} = state;
     return [..._unvisitedValves.values()].map(target => {
             const unvisitedValves = structuredClone(_unvisitedValves);
             unvisitedValves.delete(target)
             const roundsNeeded = findShortestPath(_valves, position, target);
-            if (roundsLeft < roundsNeeded){
+            if (roundsLeft < roundsNeeded) {
                 return {
                     position,
                     roundsLeft: 0,
@@ -119,8 +61,116 @@ function advanceState(state: State, _valves: Map<string, Valve>): State[] {
     )
 }
 
+export function advanceWithElephant(state: StateWithElephant, _valves: Map<string, Valve>): StateWithElephant[] {
+    const {unvisitedValves, roundsLeft, hero, elephant, flowPerRound, pressureReleased} = state;
 
-function findShortestPath(_valves: Map<string, Valve>, _start: string, _target: string) {
+
+    // both characters are at the last known location - a valve that they opened
+    // each one is moving towards a new valve, the distance to which is known
+    // the one closer to its target moves there and opens it and chooses a new target,
+    // removing it from their shared pool, and has the new distance calculated
+    // the one further away has the number of rounds used by the first one deducted from their roundsLeft
+    // if both are the same number of steps away from their target, both choose a new target
+
+    // this only happens at the very beginning, and both characters simply get assigned targets
+    // without actually moving them and without deducting any rounds
+    if (hero.roundsNeeded === -1) {
+        return [...unvisitedValves.values()].map(target => {
+            const unvisitedValvesLeft = new Set([...unvisitedValves.values()].filter(v => v !== target));
+
+            const _hero = {
+                roundsNeeded: findShortestPath(_valves, hero.position, target),
+                walkingTowards: target,
+                position: hero.position
+            }
+
+            return [...unvisitedValvesLeft.values()].map(target => {
+                const unvisitedValvesLeftAfterElephant = new Set([...unvisitedValvesLeft.values()].filter(v => v !== target));
+
+                const _elephant = {
+                    roundsNeeded: findShortestPath(_valves, elephant.position, target),
+                    walkingTowards: target,
+                    position: elephant.position
+                }
+
+                return {
+                    hero: _hero,
+                    elephant: _elephant,
+                    roundsLeft: roundsLeft,
+                    flowPerRound: 0,
+                    unvisitedValves: unvisitedValvesLeftAfterElephant,
+                    pressureReleased: 0
+                }
+            })
+        }).flat(3);
+    } else if (hero.roundsNeeded === elephant.roundsNeeded) {
+        // this occurs if both chars have the same number of rounds towards their targets
+        // so both can be moved and given new targets at the same time
+        const _roundsLeft = roundsLeft - hero.roundsNeeded;
+        hero.position = hero.walkingTowards
+        elephant.position = elephant.walkingTowards
+        const unvisitedValvesLeftForHero = new Set([...unvisitedValves.values()]
+            .filter(v => v !== hero.position && v !== elephant.position));
+        const increasedFlow = flowPerRound + _valves.get(hero.position).flow +_valves.get(elephant.position).flow
+        const increasedPressureReleased = pressureReleased + (flowPerRound * (hero.roundsNeeded + 1))
+
+        return [...unvisitedValvesLeftForHero.values()].map(heroTarget => {
+            const _hero = {
+                roundsNeeded: findShortestPath(_valves, hero.position, heroTarget),
+                walkingTowards: heroTarget,
+                position: hero.position
+            }
+            const unvisitedValvesLeftForElephant = new Set([...unvisitedValvesLeftForHero.values()]
+                .filter(v => v !== heroTarget));
+
+            return [...unvisitedValvesLeftForElephant.values()].map(elephantTarget => {
+                const _elephant = {
+                    roundsNeeded: findShortestPath(_valves, elephant.position, elephantTarget),
+                    walkingTowards: elephantTarget,
+                    position: elephant.position
+                }
+                const unvisitedValvesLeftAfterElephant = new Set([...unvisitedValvesLeftForElephant.values()]
+                    .filter(v => v !== elephantTarget));
+
+                return {
+                    hero: _hero,
+                    elephant: _elephant,
+                    roundsLeft: roundsLeft,
+                    flowPerRound: increasedFlow,
+                    unvisitedValves: unvisitedValvesLeftAfterElephant,
+                    pressureReleased: increasedPressureReleased
+                }
+            })
+        }).flat(3);
+    } else {
+        const characterAtTarget = hero.roundsNeeded < elephant.roundsNeeded ? {...hero} : {...elephant};
+        const characterUnderway = hero.roundsNeeded > elephant.roundsNeeded ? {...hero} : {...elephant};
+
+        const roundsPassed = characterAtTarget.roundsNeeded;
+        characterAtTarget.position = characterAtTarget.walkingTowards;
+        characterUnderway.roundsNeeded -= roundsPassed;
+        const _roundsLeft = roundsLeft - roundsPassed;
+
+        return [...unvisitedValves.values()].map(target => {
+                const unvisitedValvesLeft = new Set([...unvisitedValves.values()].filter(v => v !== target));
+                characterAtTarget.roundsNeeded = findShortestPath(_valves, characterAtTarget.position, target);
+                characterAtTarget.walkingTowards = target
+                return {
+                    hero: hero.roundsNeeded < elephant.roundsNeeded ? characterAtTarget : characterUnderway,
+                    elephant: hero.roundsNeeded > elephant.roundsNeeded ? characterAtTarget : characterUnderway,
+                    roundsLeft: _roundsLeft,
+                    flowPerRound: flowPerRound + _valves.get(target).flow,
+                    unvisitedValves: unvisitedValvesLeft,
+                    pressureReleased: pressureReleased + (flowPerRound * (roundsPassed + 1))
+                }
+
+            }
+        ).flat(3);
+    }
+}
+
+
+export function findShortestPath(_valves: Map<string, Valve>, _start: string, _target: string) {
     const visited = new Set()
 
     let steps = 1
@@ -134,7 +184,7 @@ function findShortestPath(_valves: Map<string, Valve>, _start: string, _target: 
     return -1
 }
 
-function parse(input): Map<string, Valve> {
+export function parse(input): Map<string, Valve> {
     return input.split('\n').reduce((map, line) => {
         const [, valve, _flow, _tunnels] = line
             .match(/Valve (\w{2}) has flow rate=(\d+); tunnels? leads? to valves? ([A-Z, ]{2,})/)
@@ -152,6 +202,23 @@ export type Valve = {
 
 export type State = {
     position: string,
+    roundsLeft: number,
+    flowPerRound: number,
+    pressureReleased: number,
+    unvisitedValves: Set<string>
+}
+
+export type StateWithElephant = {
+    hero: {
+        position: string,
+        walkingTowards: string,
+        roundsNeeded: number
+    },
+    elephant: {
+        position: string,
+        walkingTowards: string,
+        roundsNeeded: number
+    },
     roundsLeft: number,
     flowPerRound: number,
     pressureReleased: number,
