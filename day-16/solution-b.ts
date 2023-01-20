@@ -1,4 +1,4 @@
-import {findShortestPath, Valve} from "./solution.js";
+import {writeHeapSnapshot} from "v8";
 
 export function maximizePressureReleaseWithElephant(_valves: Map<string, Valve>, _start: string, _rounds = 26) {
 
@@ -24,6 +24,8 @@ export function maximizePressureReleaseWithElephant(_valves: Map<string, Valve>,
     let queue = initializeElephantState(startingState, _valves)
     let counter = closedValvesWithFlow.size - 1
 
+    console.log("valves: " + (closedValvesWithFlow.size - 1))
+
     while (counter > 0 && queue.length > 0) {
         counter--
         const buffer = []
@@ -40,6 +42,9 @@ export function maximizePressureReleaseWithElephant(_valves: Map<string, Valve>,
             }
         }
         queue = buffer
+        console.log("queue is now " + queue.length + " long.")
+        writeHeapSnapshot("./heapdumps/" + (closedValvesWithFlow.size - counter - 1) + ".heapdump")
+        console.log("dumped heap.")
     }
 
     finalStates.push(...queue)
@@ -158,6 +163,36 @@ export function initializeElephantState(state, _valves: Map<string, Valve>) {
             }
         })
     }).flat();
+}
+
+export function findShortestPath(_valves: Map<string, Valve>, _start: string, _target: string) {
+    const visited = new Set()
+
+    let steps = 1
+    let valves = [..._valves.get(_start).tunnels]
+    while (valves.length > 0) {
+        if (valves.includes(_target)) return steps
+        steps++
+        valves = valves.map(v => _valves.get(v).tunnels.filter(t => !visited.has(t))).flat()
+        valves.forEach(t => visited.add(t))
+    }
+    return -1
+}
+
+export function parse(input): Map<string, Valve> {
+    return input.split('\n').reduce((map, line) => {
+        const [, valve, _flow, _tunnels] = line
+            .match(/Valve (\w{2}) has flow rate=(\d+); tunnels? leads? to valves? ([A-Z, ]{2,})/)
+        map.set(valve, {valve, flow: parseInt(_flow), tunnels: _tunnels.split(', '), open: false})
+        return map
+    }, new Map());
+}
+
+export type Valve = {
+    valve: string,
+    flow: number,
+    tunnels: string[],
+    open: boolean
 }
 
 export type StateWithElephant = {
