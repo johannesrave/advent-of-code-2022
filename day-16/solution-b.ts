@@ -35,6 +35,8 @@ export function maximizePressureReleaseWithElephant(_valves: Map<string, Valve>,
             for (const newState of newStates) {
                 const {elephant, hero} = newState;
                 if (hero.walkingTowards === hero.position && elephant.walkingTowards === elephant.position) {
+                    // delete newState.hero
+                    // delete newState.elephant
                     finalStates.push(newState)
                 } else {
                     buffer.push(newState)
@@ -43,8 +45,9 @@ export function maximizePressureReleaseWithElephant(_valves: Map<string, Valve>,
         }
         queue = buffer
         console.log("queue is now " + queue.length + " long.")
-        writeHeapSnapshot("./heapdumps/" + (closedValvesWithFlow.size - counter - 1) + ".heapdump")
+        writeHeapSnapshot(`./heapdumps/${Date.now()}_${closedValvesWithFlow.size - counter - 1}.heapsnapshot`)
         console.log("dumped heap.")
+        // console.log(queue[0])
     }
 
     finalStates.push(...queue)
@@ -93,44 +96,73 @@ export function advanceHeroAndElephant(state: StateWithElephant, _valves: Map<st
 
     const unvisitedByHero = [...unvisitedValves.keys()];
 
-    let combinations = unvisitedByHero.map(target => ({
+    let combinations: {
         characterAtTarget: {
-            position: characterAtTarget.position,
-            walkingTowards: target,
-            roundsNeeded: findShortestPath(_valves, characterAtTarget.position, target),
+            position: string,
+            walkingTowards: string,
+            roundsNeeded: number,
         },
         characterUnderway: {
-            position: characterUnderway.position,
-            walkingTowards: characterUnderway.walkingTowards,
-            roundsNeeded: (characterUnderway.position === characterUnderway.walkingTowards && unvisitedValves.size === 1) ?
-                Number.MAX_SAFE_INTEGER : characterUnderway.roundsNeeded,
+            position: string,
+            walkingTowards: string,
+            roundsNeeded: number,
         },
-        unvisitedValves: new Set(unvisitedByHero.filter(v => v !== target))
-    }))
+        unvisitedValves: Set<string>
+    }[] = new Array(unvisitedByHero.length)
 
-    if (characterUnderway.position === characterUnderway.walkingTowards && unvisitedValves.size > 1) {
-        combinations = combinations.map(c => {
-            const unvisitedByElephant = [...c.unvisitedValves.keys()];
-            return unvisitedByElephant.map(target => ({
-                characterAtTarget: {...c.characterAtTarget},
-                characterUnderway: {
-                    position: characterUnderway.position,
-                    walkingTowards: target,
-                    roundsNeeded: findShortestPath(_valves, characterUnderway.position, target),
-                },
-                unvisitedValves: new Set(unvisitedByElephant.filter(v => v !== target))
-            }))
-        }).flat(2)
+    for (let i = 0; i < unvisitedByHero.length; i++) {
+        const target = unvisitedByHero[i]
+        combinations[i] = {
+            characterAtTarget: {
+                position: characterAtTarget.position,
+                walkingTowards: target,
+                roundsNeeded: findShortestPath(_valves, characterAtTarget.position, target),
+            },
+            characterUnderway: {
+                position: characterUnderway.position,
+                walkingTowards: characterUnderway.walkingTowards,
+                roundsNeeded: (characterUnderway.position === characterUnderway.walkingTowards && unvisitedValves.size === 1) ?
+                    Number.MAX_SAFE_INTEGER : characterUnderway.roundsNeeded,
+            },
+            unvisitedValves: new Set(unvisitedByHero.filter(v => v !== target))
+        }
     }
 
-    return combinations.map(c => ({
-        hero: hero.roundsNeeded <= elephant.roundsNeeded ? {...c.characterAtTarget} : {...c.characterUnderway},
-        elephant: hero.roundsNeeded > elephant.roundsNeeded ? {...c.characterAtTarget} : {...c.characterUnderway},
-        roundsLeft,
-        flowPerRound,
-        unvisitedValves: c.unvisitedValves,
-        pressureReleased
-    }))
+    if (characterUnderway.position === characterUnderway.walkingTowards && unvisitedValves.size > 1) {
+        const buffer = []
+        for (let i = 0; i < combinations.length; i++) {
+            const {unvisitedValves, characterAtTarget} = combinations[i];
+            const targets = Array.from(unvisitedValves.keys())
+            for (let j = 0; j < targets.length; j++) {
+                const target = targets[j]
+                buffer.push({
+                    characterAtTarget: {...characterAtTarget},
+                    characterUnderway: {
+                        position: characterUnderway.position,
+                        walkingTowards: target,
+                        roundsNeeded: findShortestPath(_valves, characterUnderway.position, target),
+                    },
+                    unvisitedValves: new Set(targets.filter(v => v !== target))
+                })
+            }
+        }
+
+        combinations = buffer.flat()
+    }
+
+    const states = new Array(combinations.length)
+    for (let i = 0; i < combinations.length; i++) {
+        const {characterUnderway, characterAtTarget, unvisitedValves} = combinations[i]
+        states[i] = {
+            hero: hero.roundsNeeded <= elephant.roundsNeeded ? {...characterAtTarget} : {...characterUnderway},
+            elephant: hero.roundsNeeded > elephant.roundsNeeded ? {...characterAtTarget} : {...characterUnderway},
+            roundsLeft,
+            flowPerRound,
+            unvisitedValves: unvisitedValves,
+            pressureReleased
+        }
+    }
+    return states
 }
 
 export function initializeElephantState(state, _valves: Map<string, Valve>) {

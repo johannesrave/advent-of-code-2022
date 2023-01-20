@@ -1,5 +1,11 @@
 import * as fs from 'fs';
-import {maximizePressureReleaseWithElephant, parse, Valve} from "./solution-b.js";
+import {
+    advanceHeroAndElephant,
+    initializeElephantState,
+    maximizePressureReleaseWithElephant,
+    parse,
+    Valve
+} from "./solution-b.js";
 
 const testInput = fs.readFileSync('test_input.txt', 'utf-8');
 const testValves: Map<string, Valve> = parse(testInput)
@@ -8,7 +14,7 @@ const input = fs.readFileSync('input.txt', 'utf-8');
 const valves: Map<string, Valve> = parse(input)
 
 /* TESTS PART B */
-/*
+
 const initialElephantState = {
     hero: {
         position: 'AA',
@@ -44,6 +50,7 @@ console.assert(thirdElephantState.flowPerRound === 41)
 console.assert(thirdElephantState.pressureReleased === 20)
 
 const afterFourthElephantMove = advanceHeroAndElephant(thirdElephantState, testValves);
+console.log(afterFourthElephantMove)
 const fourthElephantState = afterFourthElephantMove
     .find(state => state.elephant.walkingTowards === 'EE' && state.hero.walkingTowards === 'CC')
 console.log(fourthElephantState)
@@ -69,8 +76,8 @@ console.assert(sixthElephantState.pressureReleased === 492)
 
 console.log(maximizePressureReleaseWithElephant(testValves, 'AA'))
 console.assert(maximizePressureReleaseWithElephant(testValves, 'AA') === 1707)
-*/
 
-console.log(maximizePressureReleaseWithElephant(valves, 'AA'))
+
+// console.log(maximizePressureReleaseWithElephant(valves, 'AA'))
 
 
