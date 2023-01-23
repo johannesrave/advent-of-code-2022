@@ -1,4 +1,41 @@
-import {writeHeapSnapshot} from "v8";
+/*
+* the valves WITH flow can be modelled as nodes connected by edges.
+* the valves WITHOUT flow can be modelled as weights/costs or multipliers associated with these edges.
+* this graph can be pre-computed as a map/object of Valves, where each Valve has
+* - a name
+* - a flow
+* - a number of edges with weights connecting it to other Valves
+*/
+
+
+/*
+* the edges could potentially be listed in a separate map,
+* however if the map is a "global" object (within the module),
+* then the memory consumption of this one lookup object would be negligible,
+* even when both directions of each edge are modelled seperately.
+*
+* what are the mathematical implications of this task?
+* we are looking for a maximum spanning tree of this graph, where each node is visited at least once and the
+* incurred cost is maximized. the cost for walking an edge is dynamic and depends on the Valves that have been opened aka
+* the nodes that have been visited, which need to be kept in memory (or persisted) as a "current state" for each
+* walkthrough.
+* the state consists of:
+* - the current node (where the character or token is at)
+* - the valves that have been opened or at least their cumulated flow
+* - the valves that have not been visited and not been targeted (when there are two characters walking, this is not
+* equivalent to the last point
+* - the remaining cost for reaching the next node
+* - the number of "rounds" left
+*
+* this state needs to have a low memory footprint, as several million variants
+* can potentially be kept in memory in parallel, and my system appears to be able to hold about 8 mil in memory at once.
+* arrays are smaller in memory by a factor of 3, so they will be used instead of the more readable obvjects
+* it would also be feasible to save an array of boolean flags for the targetpool and the visitedpool of nodes
+*
+* the formula for the memory complexity appears to be very dynamic, but peaks around the 6th advancement of states with 14 nodes
+* */
+
+
 
 export function maximizePressureReleaseWithElephant(_valves: Map<string, Valve>, _start: string, _rounds = 26) {
 
@@ -45,9 +82,9 @@ export function maximizePressureReleaseWithElephant(_valves: Map<string, Valve>,
         }
         queue = buffer
         console.log("queue is now " + queue.length + " long.")
-        writeHeapSnapshot(`./heapdumps/${Date.now()}_${closedValvesWithFlow.size - counter - 1}.heapsnapshot`)
-        console.log("dumped heap.")
-        // console.log(queue[0])
+        // writeHeapSnapshot(`./heapdumps/${Date.now()}_${closedValvesWithFlow.size - counter - 1}.heapsnapshot`)
+        // console.log("dumped heap.")
+        console.log(queue[0])
     }
 
     finalStates.push(...queue)
@@ -166,35 +203,79 @@ export function advanceHeroAndElephant(state: StateWithElephant, _valves: Map<st
 }
 
 export function initializeElephantState(state, _valves: Map<string, Valve>) {
-    const {unvisitedValves, roundsLeft, hero, elephant} = state;
-    return [...unvisitedValves.values()].map(target => {
-        const unvisitedValvesLeft = new Set([...unvisitedValves.values()].filter(v => v !== target));
+    const {unvisitedValves, roundsLeft, hero, elephant}: StateWithElephant = state;
 
+    const states = []
+    const targets = Array.from(unvisitedValves.keys())
+    for (let i = 0; i < unvisitedValves.size; i++) {
+        const target = targets[i]
         const _hero = {
             position: hero.position,
             walkingTowards: target,
             roundsNeeded: findShortestPath(_valves, hero.position, target),
         }
 
-        return [...unvisitedValvesLeft.values()].map(target => {
-            const unvisitedValvesLeftAfterElephant = new Set([...unvisitedValvesLeft.values()].filter(v => v !== target));
-
+        for (let j = i + 1; j < targets.length; j++) {
+            const elephantTarget = targets[j];
             const _elephant = {
                 position: elephant.position,
-                walkingTowards: target,
-                roundsNeeded: findShortestPath(_valves, elephant.position, target),
+                walkingTowards: elephantTarget,
+                roundsNeeded: findShortestPath(_valves, elephant.position, elephantTarget),
             }
+            states.push({
+                    hero: _hero,
+                    elephant: _elephant,
+                    roundsLeft: roundsLeft,
+                    flowPerRound: 0,
+                    unvisitedValves: new Set(targets.filter(t => t !== target && t !== elephantTarget)),
+                    pressureReleased: 0
+                }
+            )
+        }
+    }
+    return states
 
-            return {
-                hero: _hero,
-                elephant: _elephant,
-                roundsLeft: roundsLeft,
-                flowPerRound: 0,
-                unvisitedValves: unvisitedValvesLeftAfterElephant,
-                pressureReleased: 0
-            }
-        })
-    }).flat();
+    // return [...unvisitedValves.values()].map(target => {
+    //     const unvisitedValvesLeft = new Set([...unvisitedValves.values()]
+    //         .filter(v => v !== target));
+    //
+    //     const _hero = {
+    //         position: hero.position,
+    //         walkingTowards: target,
+    //         roundsNeeded: findShortestPath(_valves, hero.position, target),
+    //     }
+    //
+    //     return [...unvisitedValvesLeft.values()].map(target => {
+    //         const unvisitedValvesLeftAfterElephant = new Set([...unvisitedValvesLeft.values()]
+    //             .filter(v => v !== target && v !== _hero.walkingTowards));
+    //
+    //         const _elephant = {
+    //             position: elephant.position,
+    //             walkingTowards: target,
+    //             roundsNeeded: findShortestPath(_valves, elephant.position, target),
+    //         }
+    //
+    //         return {
+    //             hero: _hero,
+    //             elephant: _elephant,
+    //             roundsLeft: roundsLeft,
+    //             flowPerRound: 0,
+    //             unvisitedValves: unvisitedValvesLeftAfterElephant,
+    //             pressureReleased: 0
+    //         }
+    //     })
+    // }).flat();
+}
+
+export function parse(input): Map<string, Valve> {
+    const valves = input.split('\n')
+        .reduce((map, line) => {
+            const [, valve, _flow, _tunnels] = line
+                .match(/Valve (\w{2}) has flow rate=(\d+); tunnels? leads? to valves? ([A-Z, ]{2,})/)
+            map.set(valve, {valve, flow: parseInt(_flow), tunnels: _tunnels.split(', '), open: false})
+            return map
+        }, new Map());
+    return valves;
 }
 
 export function findShortestPath(_valves: Map<string, Valve>, _start: string, _target: string) {
@@ -211,20 +292,42 @@ export function findShortestPath(_valves: Map<string, Valve>, _start: string, _t
     return -1
 }
 
-export function parse(input): Map<string, Valve> {
-    return input.split('\n').reduce((map, line) => {
-        const [, valve, _flow, _tunnels] = line
-            .match(/Valve (\w{2}) has flow rate=(\d+); tunnels? leads? to valves? ([A-Z, ]{2,})/)
-        map.set(valve, {valve, flow: parseInt(_flow), tunnels: _tunnels.split(', '), open: false})
-        return map
-    }, new Map());
+export function parseToObject(input): Record<string, Valve> {
+    return input.split('\n')
+        .map((line): Valve => {
+            const [, valve, _flow, _tunnels] =
+                line.match(/Valve (\w{2}) has flow rate=(\d+); tunnels? leads? to valves? ([A-Z, ]{2,})/)
+            return {valve, flow: parseInt(_flow), tunnels: _tunnels.split(', ')}
+        })
+        .map((v: Valve, _, valvesArr: Valve[]) => ({
+            ...v,
+            tunnels: valvesArr.filter(t => t !== v).map(t => ([t, findShortestPath2(valvesArr, v, t.valve)]))
+        }))
+        .reduce((obj, v) => {
+            obj[v.valve] = v;
+            return obj
+        }, {});
+}
+
+
+export function findShortestPath2(valves: Valve[], start: Valve, target: string) {
+    const visited = new Set()
+    let steps = 1
+    let valvesToCheck = start.tunnels
+    while (valvesToCheck.length > 0) {
+        if (valvesToCheck.includes(target)) return steps;
+        steps++
+        valvesToCheck = valvesToCheck.map(v => valves[v].tunnels.filter(t => !visited.has(t))).flat()
+        valvesToCheck.forEach(t => visited.add(t))
+    }
+    return -1
 }
 
 export type Valve = {
     valve: string,
     flow: number,
     tunnels: string[],
-    open: boolean
+    open?: boolean
 }
 
 export type StateWithElephant = {

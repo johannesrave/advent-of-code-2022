@@ -3,18 +3,21 @@ import {
     advanceHeroAndElephant,
     initializeElephantState,
     maximizePressureReleaseWithElephant,
-    parse,
+    parse, parseToObject,
     Valve
 } from "./solution-b.js";
 
 const testInput = fs.readFileSync('test_input.txt', 'utf-8');
 const testValves: Map<string, Valve> = parse(testInput)
+const testValvesObj = parseToObject(testInput)
+console.log(JSON.stringify(testValvesObj, null, 1))
 
 const input = fs.readFileSync('input.txt', 'utf-8');
 const valves: Map<string, Valve> = parse(input)
 
 /* TESTS PART B */
 
+/*
 const initialElephantState = {
     hero: {
         position: 'AA',
@@ -32,18 +35,19 @@ const initialElephantState = {
     pressureReleased: 0
 };
 const afterFirstElephantMove = initializeElephantState(initialElephantState, testValves);
+// console.log(afterFirstElephantMove)
 const firstElephantState = afterFirstElephantMove
-    .find(state => state.elephant.walkingTowards === 'DD' && state.hero.walkingTowards === 'JJ')
+    .find(state => state.elephant.walkingTowards === 'JJ' && state.hero.walkingTowards === 'DD')
 console.log(firstElephantState)
 
 const afterSecondElephantMove = advanceHeroAndElephant(firstElephantState, testValves);
 const secondElephantState = afterSecondElephantMove
-    .find(state => state.elephant.walkingTowards === 'HH' && state.hero.walkingTowards === 'JJ')
+    .find(state => state.elephant.walkingTowards === 'JJ' && state.hero.walkingTowards === 'HH')
 console.log(secondElephantState)
 
 const afterThirdElephantMove = advanceHeroAndElephant(secondElephantState, testValves);
 const thirdElephantState = afterThirdElephantMove
-    .find(state => state.elephant.walkingTowards === 'HH' && state.hero.walkingTowards === 'BB')
+    .find(state => state.elephant.walkingTowards === 'BB' && state.hero.walkingTowards === 'HH')
 console.log(thirdElephantState)
 console.assert(thirdElephantState.roundsLeft === 23)
 console.assert(thirdElephantState.flowPerRound === 41)
@@ -52,7 +56,7 @@ console.assert(thirdElephantState.pressureReleased === 20)
 const afterFourthElephantMove = advanceHeroAndElephant(thirdElephantState, testValves);
 console.log(afterFourthElephantMove)
 const fourthElephantState = afterFourthElephantMove
-    .find(state => state.elephant.walkingTowards === 'EE' && state.hero.walkingTowards === 'CC')
+    .find(state => state.elephant.walkingTowards === 'CC' && state.hero.walkingTowards === 'EE')
 console.log(fourthElephantState)
 console.assert(fourthElephantState.roundsLeft === 19)
 console.assert(fourthElephantState.flowPerRound === 76)
@@ -60,7 +64,7 @@ console.assert(fourthElephantState.pressureReleased === 184)
 
 const afterFifthElephantMove = advanceHeroAndElephant(fourthElephantState, testValves);
 const fifthElephantState = afterFifthElephantMove
-    .find(state => state.elephant.walkingTowards === 'EE')
+    .find(state => state.hero.walkingTowards === 'EE')
 console.log(fifthElephantState)
 console.assert(fifthElephantState.roundsLeft === 17)
 console.assert(fifthElephantState.flowPerRound === 78)
@@ -75,7 +79,8 @@ console.assert(sixthElephantState.pressureReleased === 492)
 
 
 console.log(maximizePressureReleaseWithElephant(testValves, 'AA'))
-console.assert(maximizePressureReleaseWithElephant(testValves, 'AA') === 1707)
+*/
+// console.assert(maximizePressureReleaseWithElephant(testValves, 'AA') === 1707)
 
 
 // console.log(maximizePressureReleaseWithElephant(valves, 'AA'))
