@@ -7,6 +7,19 @@
 * - a number of edges with weights connecting it to other Valves
 */
 
+type RawValve = {
+    id: string,
+    flow: number,
+    rawNeighbours: string[]
+}
+
+export type Valve = {
+    id: string,
+    flow: number,
+    paths: { [distance: string]: number }
+}
+
+export type Valves = { [id: string]: Valve }
 
 /*
 * the edges could potentially be listed in a separate map,
@@ -26,323 +39,243 @@
 * equivalent to the last point
 * - the remaining cost for reaching the next node
 * - the number of "rounds" left
-*
+*/
+
+type CharState = [current: string, next: string, distance: number];
+
+type State = [
+    hero: CharState,
+    elephant: CharState,
+    unvisited: string[],
+    flow: number,
+    released: number,
+    roundsLeft: number
+]
+
+/*
 * this state needs to have a low memory footprint, as several million variants
 * can potentially be kept in memory in parallel, and my system appears to be able to hold about 8 mil in memory at once.
-* arrays are smaller in memory by a factor of 3, so they will be used instead of the more readable obvjects
-* it would also be feasible to save an array of boolean flags for the targetpool and the visitedpool of nodes
+* arrays are smaller in memory by a factor of 3, so they will be used instead of the more readable objects
+* it would also be feasible to save an array of boolean flags for the targetpool and the visitedpool of nodes, as
+* those have an even lower memory consumption
+*
+* ADR: i will save arrays of strings instead. they appear to a quasi-reference type in JS either way,
+* and so their footprint is VERY LOW as only a set of about 10 strings is used.
+* also this means that the arrays don't need to remain the same size throughout a walkthrough. if an "opened" array
+* turns out not to be necessary, then the memory used per State will actually shrink with state changes
 *
 * the formula for the memory complexity appears to be very dynamic, but peaks around the 6th advancement of states with 14 nodes
 * */
 
+// const testInput = fs.readFileSync('test_input.txt', 'utf-8');
+// // const testValves: Map<string, Valve> = parse(testInput)
+// const testValves = parseToObject(testInput)
+// // console.log(JSON.stringify(testValves, null, 1))
+// const rel = maximizePressureReleaseWithElephant(testValves)
 
+// console.log(rel)
+export function parseToObject(input): Valves {
+    const rawValves: RawValve[] = input.split('\n')
+        .map((line) => {
+            const [, id, _flow, _rawNeighbours] =
+                line.match(/Valve (\w{2}) has flow rate=(\d+); tunnels? leads? to valves? ([A-Z, ]{2,})/)
+            return {id, flow: parseInt(_flow), rawNeighbours: _rawNeighbours.split(', ')}
+        });
 
-export function maximizePressureReleaseWithElephant(_valves: Map<string, Valve>, _start: string, _rounds = 26) {
+    return rawValves
+        .filter(v => v.flow > 0 || v.id === "AA")
+        .map((v, _, valvesArr): Valve => ({
+            id: v.id,
+            flow: v.flow,
+            paths: getPaths(valvesArr.filter(v => v.id !== "AA"), v, rawValves)
+        }))
+        .reduce((obj, v): Valves => {
+            obj[v.id] = v;
+            return obj
+        }, {});
+}
 
-    const closedValvesWithFlow = new Set([..._valves.values()].filter(v => v.flow > 0 && !v.open).map(v => v.valve))
-    const startingState: StateWithElephant = {
-        hero: {
-            position: _start,
-            walkingTowards: undefined,
-            roundsNeeded: -1
-        },
-        elephant: {
-            position: _start,
-            walkingTowards: undefined,
-            roundsNeeded: -1
-        },
-        roundsLeft: _rounds,
-        flowPerRound: 0,
-        unvisitedValves: closedValvesWithFlow,
-        pressureReleased: 0
+function getPaths(valvesArr: RawValve[], v: RawValve, rawValves: RawValve[]) {
+    return valvesArr
+        .filter(_v => _v !== v)
+        .map(t => { return [t.id, findMinimalDistance(v.id, t.id, rawValves)] })
+        .reduce((paths, [id, dist]) => {
+            paths[id] = dist;
+            return paths
+        }, {});
+}
+
+export function findMinimalDistance(start: string, target: string, rawValves: RawValve[]): number {
+    const visited = new Set()
+    let steps = 1
+    let queueOfValves = rawValves.find(v => v.id === start).rawNeighbours
+    while (queueOfValves.length > 0) {
+        if (queueOfValves.includes(target)) return steps
+        steps++
+        queueOfValves = queueOfValves.map(v => rawValves.find(_ => _.id === v).rawNeighbours.filter(t => !visited.has(t))).flat()
+        queueOfValves.forEach(t => visited.add(t))
     }
+    return -1
+}
 
-    const finalStates = []
-    let queue = initializeElephantState(startingState, _valves)
-    let counter = closedValvesWithFlow.size - 1
 
-    console.log("valves: " + (closedValvesWithFlow.size - 1))
+export function maximizePressureReleaseWithElephant(valves: Valves, start: string = "AA", rounds = 26) {
+
+    // const closedValvesWithFlow = new Set([...valves.values()].filter(v => v.flow > 0 && !v.open).map(v => v.valve))
+
+    const finalStates: State[] = []
+    let queue: State[] = initializeElephantState(valves, start, rounds)
+    let counter = Object.keys(valves).length - 1
+
+    console.log("queue is now " + queue.length + " long.")
+    console.log(queue[0] ?? "Nothing in the queue.")
 
     while (counter > 0 && queue.length > 0) {
         counter--
         const buffer = []
         for (const state of queue) {
-            const newStates = advanceHeroAndElephant(state, _valves)
+            const newStates: State[] = advanceHeroAndElephant(valves, state)
 
             for (const newState of newStates) {
-                const {elephant, hero} = newState;
-                if (hero.walkingTowards === hero.position && elephant.walkingTowards === elephant.position) {
-                    // delete newState.hero
-                    // delete newState.elephant
-                    finalStates.push(newState)
-                } else {
+                const [hero, elephant] = newState;
+                if (hero || elephant) {
                     buffer.push(newState)
+                } else {
+                    finalStates.push(newState)
                 }
             }
         }
         queue = buffer
         console.log("queue is now " + queue.length + " long.")
-        // writeHeapSnapshot(`./heapdumps/${Date.now()}_${closedValvesWithFlow.size - counter - 1}.heapsnapshot`)
+        // writeHeapSnapshot(`./heapdumps/${Date.now()}_${valves.size - counter - 1}.heapsnapshot`)
         // console.log("dumped heap.")
-        console.log(queue[0])
+        console.log(queue[0] ?? "Nothing in the queue.")
     }
 
     finalStates.push(...queue)
 
-    const pressures = finalStates.map(state => state.pressureReleased + (state.flowPerRound * state.roundsLeft))
+    const pressures = finalStates.map(([, , , flow, released, roundsLeft]) => released + (flow * roundsLeft))
     const [maxPressure] = [...pressures].sort((a, b) => b - a)
     return maxPressure
+
+
 }
+export function initializeElephantState(valves: Valves, start: string = "AA", rounds: number = 26) {
 
-export function advanceHeroAndElephant(state: StateWithElephant, _valves: Map<string, Valve>): StateWithElephant[] {
-    let {hero, elephant, unvisitedValves, roundsLeft, pressureReleased, flowPerRound} = state;
+    const states: State[] = []
 
-    const characterAtTarget = hero.roundsNeeded <= elephant.roundsNeeded ? {...hero} : {...elephant};
-    const characterUnderway = hero.roundsNeeded > elephant.roundsNeeded ? {...hero} : {...elephant};
+    const unvisited = Object.entries(valves).filter(([v]) => v !== start).map(([v]) => v)
+    for (let i = 0; i < unvisited.length; i++) {
+        const heroTarget = unvisited[i]
+        const _hero: CharState = [start, heroTarget, valves[start].paths[heroTarget]]
 
-    const roundsPassed = characterAtTarget.roundsNeeded + 1 // +1 for opening the current valve(s)
-    pressureReleased += flowPerRound * roundsPassed
-
-    characterAtTarget.position = characterAtTarget.walkingTowards
-    flowPerRound += _valves.get(characterAtTarget.position).flow // opens valve
-
-    if (hero.roundsNeeded === elephant.roundsNeeded) {
-        characterUnderway.position = characterUnderway.walkingTowards
-        flowPerRound += _valves.get(characterUnderway.position).flow // opens valve
-    } else {
-        characterUnderway.roundsNeeded -= roundsPassed
-    }
-
-    roundsLeft -= roundsPassed
-
-    if (state.unvisitedValves.size === 0) {
-        characterAtTarget.roundsNeeded = Number.MAX_SAFE_INTEGER // the char has reached its target and can not be assigned a new one.
-        if (characterUnderway.position === characterUnderway.walkingTowards) {
-            characterUnderway.roundsNeeded = Number.MAX_SAFE_INTEGER
-        }
-
-        return [{
-            hero: hero.roundsNeeded <= elephant.roundsNeeded ? {...characterAtTarget} : {...characterUnderway},
-            elephant: hero.roundsNeeded > elephant.roundsNeeded ? {...characterAtTarget} : {...characterUnderway},
-            roundsLeft,
-            flowPerRound,
-            unvisitedValves,
-            pressureReleased
-        }]
-    }
-
-    const unvisitedByHero = [...unvisitedValves.keys()];
-
-    let combinations: {
-        characterAtTarget: {
-            position: string,
-            walkingTowards: string,
-            roundsNeeded: number,
-        },
-        characterUnderway: {
-            position: string,
-            walkingTowards: string,
-            roundsNeeded: number,
-        },
-        unvisitedValves: Set<string>
-    }[] = new Array(unvisitedByHero.length)
-
-    for (let i = 0; i < unvisitedByHero.length; i++) {
-        const target = unvisitedByHero[i]
-        combinations[i] = {
-            characterAtTarget: {
-                position: characterAtTarget.position,
-                walkingTowards: target,
-                roundsNeeded: findShortestPath(_valves, characterAtTarget.position, target),
-            },
-            characterUnderway: {
-                position: characterUnderway.position,
-                walkingTowards: characterUnderway.walkingTowards,
-                roundsNeeded: (characterUnderway.position === characterUnderway.walkingTowards && unvisitedValves.size === 1) ?
-                    Number.MAX_SAFE_INTEGER : characterUnderway.roundsNeeded,
-            },
-            unvisitedValves: new Set(unvisitedByHero.filter(v => v !== target))
-        }
-    }
-
-    if (characterUnderway.position === characterUnderway.walkingTowards && unvisitedValves.size > 1) {
-        const buffer = []
-        for (let i = 0; i < combinations.length; i++) {
-            const {unvisitedValves, characterAtTarget} = combinations[i];
-            const targets = Array.from(unvisitedValves.keys())
-            for (let j = 0; j < targets.length; j++) {
-                const target = targets[j]
-                buffer.push({
-                    characterAtTarget: {...characterAtTarget},
-                    characterUnderway: {
-                        position: characterUnderway.position,
-                        walkingTowards: target,
-                        roundsNeeded: findShortestPath(_valves, characterUnderway.position, target),
-                    },
-                    unvisitedValves: new Set(targets.filter(v => v !== target))
-                })
-            }
-        }
-
-        combinations = buffer.flat()
-    }
-
-    const states = new Array(combinations.length)
-    for (let i = 0; i < combinations.length; i++) {
-        const {characterUnderway, characterAtTarget, unvisitedValves} = combinations[i]
-        states[i] = {
-            hero: hero.roundsNeeded <= elephant.roundsNeeded ? {...characterAtTarget} : {...characterUnderway},
-            elephant: hero.roundsNeeded > elephant.roundsNeeded ? {...characterAtTarget} : {...characterUnderway},
-            roundsLeft,
-            flowPerRound,
-            unvisitedValves: unvisitedValves,
-            pressureReleased
+        for (let j = i + 1; j < unvisited.length; j++) {
+            const elephantTarget = unvisited[j];
+            const _elephant: CharState = [start, elephantTarget, valves[start].paths[elephantTarget]]
+            const _unvisited = unvisited.filter(t => t !== heroTarget && t !== elephantTarget)
+            states.push([_hero, _elephant, _unvisited, 0, 0, rounds])
         }
     }
     return states
 }
+export function advanceHeroAndElephant(valves: Valves, state: State): State[] {
+    let [hero, elephant, unvisited, flow, released, roundsLeft] = state;
+    const isElephantFinished = !elephant
+    const isAtLeastOneTargetLeft = unvisited.length >= 1
+    const areManyTargetsLeft = unvisited.length > 1
 
-export function initializeElephantState(state, _valves: Map<string, Valve>) {
-    const {unvisitedValves, roundsLeft, hero, elephant}: StateWithElephant = state;
+    const [heroPos, heroTarget, heroDist] = hero;
 
-    const states = []
-    const targets = Array.from(unvisitedValves.keys())
-    for (let i = 0; i < unvisitedValves.size; i++) {
-        const target = targets[i]
-        const _hero = {
-            position: hero.position,
-            walkingTowards: target,
-            roundsNeeded: findShortestPath(_valves, hero.position, target),
-        }
+    if(isElephantFinished){
+        const roundsPassed = heroDist + 1 // +1 for opening the current valve(s)
+        roundsLeft -= roundsPassed
+        released += flow * roundsPassed
+        flow += valves[heroTarget].flow // opens valve
+        return [[undefined, undefined, [], flow, released, roundsLeft]]
+    }
 
-        for (let j = i + 1; j < targets.length; j++) {
-            const elephantTarget = targets[j];
-            const _elephant = {
-                position: elephant.position,
-                walkingTowards: elephantTarget,
-                roundsNeeded: findShortestPath(_valves, elephant.position, elephantTarget),
-            }
-            states.push({
-                    hero: _hero,
-                    elephant: _elephant,
-                    roundsLeft: roundsLeft,
-                    flowPerRound: 0,
-                    unvisitedValves: new Set(targets.filter(t => t !== target && t !== elephantTarget)),
-                    pressureReleased: 0
+    const [elephantPos, elephantTarget, elephantDist] = elephant;
+
+    const isHeroAtTarget = heroDist <= elephantDist
+    const isElephantAtTarget = heroDist >= elephantDist
+
+    if (isHeroAtTarget && isElephantAtTarget) {
+        const roundsPassed = heroDist + 1 // +1 for opening the current valve(s)
+        roundsLeft -= roundsPassed
+        released += flow * roundsPassed
+        flow += valves[heroTarget].flow + valves[elephantTarget].flow // opens valve
+
+        if (areManyTargetsLeft) {
+            const states = []
+            for (let i = 0; i < unvisited.length; i++) {
+                const newHeroPos = heroTarget
+                const newHeroTarget = unvisited[i]
+                const _hero: CharState =
+                    [newHeroPos, newHeroTarget, valves[newHeroPos].paths[newHeroTarget]]
+
+                for (let j = 0; j < unvisited.length; j++) {
+                    if(unvisited[i] === unvisited[j]) continue;
+                    const newElephantPos = elephantTarget
+                    const newElephantTarget = unvisited[j];
+                    const _elephant: CharState =
+                        [newElephantPos, newElephantTarget, valves[newElephantPos].paths[newElephantTarget]]
+                    const _unvisited = unvisited.filter(t => t !== newHeroTarget && t !== newElephantTarget)
+                    states.push([_hero, _elephant, _unvisited, flow, released, roundsLeft])
                 }
-            )
+            }
+            return states
+
+        } else if (isAtLeastOneTargetLeft) {
+            const heroDistToLastTarget = valves[heroTarget].paths[unvisited[0]]
+            const elephantDistToLastTarget = valves[elephantTarget].paths[unvisited[0]]
+            const heroIsCloser = heroDistToLastTarget < elephantDistToLastTarget
+            const movingChar: CharState = heroIsCloser ?
+                [heroTarget, unvisited[0], heroDistToLastTarget] :
+                [elephantTarget, unvisited[0], elephantDistToLastTarget]
+            return [[movingChar, undefined, [], flow, released, roundsLeft]]
+        } else {
+            return [[undefined, undefined, [], flow, released, roundsLeft]]
+        }
+    } else if (isHeroAtTarget) {
+        const roundsPassed = heroDist + 1 // +1 for opening the current valve(s)
+        roundsLeft -= roundsPassed
+        released += flow * roundsPassed
+        flow += valves[heroTarget].flow // opens valve
+        if (isAtLeastOneTargetLeft) {
+            const states = []
+            for (let i = 0; i < unvisited.length; i++) {
+                const newHeroPos = heroTarget
+                const newHeroTarget = unvisited[i]
+                const _hero: CharState = [newHeroPos, newHeroTarget, valves[newHeroPos].paths[newHeroTarget]]
+                const _elephant: CharState = [elephantPos, elephantTarget, elephantDist - roundsPassed]
+                const _unvisited = unvisited.filter(t => t !== newHeroTarget)
+                states.push([_hero, _elephant, _unvisited, flow, released, roundsLeft])
+            }
+            return states
+
+        } else {
+            return [[undefined, undefined, [], flow, released, roundsLeft]]
+        }
+    } else if (isElephantAtTarget) {
+        const roundsPassed = elephantDist + 1 // +1 for opening the current valve(s)
+        roundsLeft -= roundsPassed
+        released += flow * roundsPassed
+        flow += valves[elephantTarget].flow // opens valve
+        if (isAtLeastOneTargetLeft) {
+            const states = []
+            for (let i = 0; i < unvisited.length; i++) {
+                const newElephantPos = elephantTarget
+                const newElephantTarget = unvisited[i]
+                const _hero: CharState = [heroPos, heroTarget, heroDist - roundsPassed]
+                const _elephant: CharState = [newElephantPos, newElephantTarget, valves[newElephantPos].paths[newElephantTarget]]
+                const _unvisited = unvisited.filter(t => t !== newElephantTarget)
+                states.push([_hero, _elephant, _unvisited, flow, released, roundsLeft])
+            }
+            return states
+
+        } else {
+            const _hero: CharState = [heroPos, heroTarget, heroDist - roundsPassed]
+            return [[_hero, undefined, [], flow, released, roundsLeft]]
         }
     }
-    return states
-
-    // return [...unvisitedValves.values()].map(target => {
-    //     const unvisitedValvesLeft = new Set([...unvisitedValves.values()]
-    //         .filter(v => v !== target));
-    //
-    //     const _hero = {
-    //         position: hero.position,
-    //         walkingTowards: target,
-    //         roundsNeeded: findShortestPath(_valves, hero.position, target),
-    //     }
-    //
-    //     return [...unvisitedValvesLeft.values()].map(target => {
-    //         const unvisitedValvesLeftAfterElephant = new Set([...unvisitedValvesLeft.values()]
-    //             .filter(v => v !== target && v !== _hero.walkingTowards));
-    //
-    //         const _elephant = {
-    //             position: elephant.position,
-    //             walkingTowards: target,
-    //             roundsNeeded: findShortestPath(_valves, elephant.position, target),
-    //         }
-    //
-    //         return {
-    //             hero: _hero,
-    //             elephant: _elephant,
-    //             roundsLeft: roundsLeft,
-    //             flowPerRound: 0,
-    //             unvisitedValves: unvisitedValvesLeftAfterElephant,
-    //             pressureReleased: 0
-    //         }
-    //     })
-    // }).flat();
-}
-
-export function parse(input): Map<string, Valve> {
-    const valves = input.split('\n')
-        .reduce((map, line) => {
-            const [, valve, _flow, _tunnels] = line
-                .match(/Valve (\w{2}) has flow rate=(\d+); tunnels? leads? to valves? ([A-Z, ]{2,})/)
-            map.set(valve, {valve, flow: parseInt(_flow), tunnels: _tunnels.split(', '), open: false})
-            return map
-        }, new Map());
-    return valves;
-}
-
-export function findShortestPath(_valves: Map<string, Valve>, _start: string, _target: string) {
-    const visited = new Set()
-
-    let steps = 1
-    let valves = [..._valves.get(_start).tunnels]
-    while (valves.length > 0) {
-        if (valves.includes(_target)) return steps
-        steps++
-        valves = valves.map(v => _valves.get(v).tunnels.filter(t => !visited.has(t))).flat()
-        valves.forEach(t => visited.add(t))
-    }
-    return -1
-}
-
-export function parseToObject(input): Record<string, Valve> {
-    return input.split('\n')
-        .map((line): Valve => {
-            const [, valve, _flow, _tunnels] =
-                line.match(/Valve (\w{2}) has flow rate=(\d+); tunnels? leads? to valves? ([A-Z, ]{2,})/)
-            return {valve, flow: parseInt(_flow), tunnels: _tunnels.split(', ')}
-        })
-        .map((v: Valve, _, valvesArr: Valve[]) => ({
-            ...v,
-            tunnels: valvesArr.filter(t => t !== v).map(t => ([t, findShortestPath2(valvesArr, v, t.valve)]))
-        }))
-        .reduce((obj, v) => {
-            obj[v.valve] = v;
-            return obj
-        }, {});
-}
-
-
-export function findShortestPath2(valves: Valve[], start: Valve, target: string) {
-    const visited = new Set()
-    let steps = 1
-    let valvesToCheck = start.tunnels
-    while (valvesToCheck.length > 0) {
-        if (valvesToCheck.includes(target)) return steps;
-        steps++
-        valvesToCheck = valvesToCheck.map(v => valves[v].tunnels.filter(t => !visited.has(t))).flat()
-        valvesToCheck.forEach(t => visited.add(t))
-    }
-    return -1
-}
-
-export type Valve = {
-    valve: string,
-    flow: number,
-    tunnels: string[],
-    open?: boolean
-}
-
-export type StateWithElephant = {
-    hero: {
-        position: string,
-        walkingTowards: string,
-        roundsNeeded: number
-    },
-    elephant: {
-        position: string,
-        walkingTowards: string,
-        roundsNeeded: number
-    },
-    roundsLeft: number,
-    flowPerRound: number,
-    pressureReleased: number,
-    unvisitedValves: Set<string>
 }

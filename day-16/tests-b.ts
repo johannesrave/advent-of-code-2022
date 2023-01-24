@@ -3,17 +3,72 @@ import {
     advanceHeroAndElephant,
     initializeElephantState,
     maximizePressureReleaseWithElephant,
-    parse, parseToObject,
-    Valve
+    parseToObject,
 } from "./solution-b.js";
 
 const testInput = fs.readFileSync('test_input.txt', 'utf-8');
-const testValves: Map<string, Valve> = parse(testInput)
-const testValvesObj = parseToObject(testInput)
-console.log(JSON.stringify(testValvesObj, null, 1))
+const testValves = parseToObject(testInput)
+// console.log(JSON.stringify(testValves, null, 2))
+const rel = maximizePressureReleaseWithElephant(testValves)
+console.log(rel)
+console.log()
+console.log()
+console.log("UNIT TESTS")
 
-const input = fs.readFileSync('input.txt', 'utf-8');
-const valves: Map<string, Valve> = parse(input)
+const afterFirstElephantMove = initializeElephantState(testValves);
+// console.log(afterFirstElephantMove)
+const firstElephantState = afterFirstElephantMove
+    .find(([[,heroTarget], [,elephantTarget]]) =>
+        [heroTarget, elephantTarget].includes('DD') && [heroTarget, elephantTarget].includes('JJ')
+    )
+console.log(firstElephantState)
+
+const afterSecondElephantMove = advanceHeroAndElephant(testValves, firstElephantState);
+const secondElephantState = afterSecondElephantMove
+    .find(([[,heroTarget], [,elephantTarget]]) =>
+        (heroTarget === 'JJ' && elephantTarget === 'HH') ||
+        (heroTarget === 'HH' && elephantTarget === 'JJ')
+    )
+console.log(secondElephantState)
+
+const afterThirdElephantMove = advanceHeroAndElephant(testValves, secondElephantState);
+const thirdElephantState = afterThirdElephantMove
+    .find(([[,heroTarget], [,elephantTarget]]) =>
+        (heroTarget === 'BB' && elephantTarget === 'HH') ||
+        (heroTarget === 'HH' && elephantTarget === 'BB')
+    )
+console.log(thirdElephantState)
+console.assert(thirdElephantState[3] === 41)
+console.assert(thirdElephantState[4] === 20)
+console.assert(thirdElephantState[5] === 23)
+
+const afterFourthElephantMove = advanceHeroAndElephant(testValves, thirdElephantState);
+const fourthElephantState = afterFourthElephantMove
+    .find(([[heroPos,heroTarget], [elephantPos,elephantTarget]]) =>
+        (heroPos === 'HH' && heroTarget === 'EE') && (elephantPos === 'BB' && elephantTarget === 'CC')
+    )
+console.log(fourthElephantState)
+console.assert(fourthElephantState[3] === 76)
+console.assert(fourthElephantState[4] === 184)
+console.assert(fourthElephantState[5] === 19)
+
+const afterFifthElephantMove = advanceHeroAndElephant(testValves, fourthElephantState);
+const fifthElephantState = afterFifthElephantMove[0]
+console.log(fifthElephantState)
+console.assert(fifthElephantState[3] === 78)
+console.assert(fifthElephantState[4] === 336)
+console.assert(fifthElephantState[5] === 17)
+
+const afterSixthElephantMove = advanceHeroAndElephant(testValves, fifthElephantState);
+const [sixthElephantState] = afterSixthElephantMove
+console.log(sixthElephantState)
+console.assert(sixthElephantState[3] === 81)
+console.assert(sixthElephantState[4] === 492)
+console.assert(sixthElephantState[5] === 15)
+
+
+// const input = fs.readFileSync('input.txt', 'utf-8');
+// const valves: Map<string, Valve> = parse(input)
 
 /* TESTS PART B */
 
