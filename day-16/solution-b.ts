@@ -106,7 +106,7 @@ export function findMinimalDistance(start: string, target: string, rawValves: Ra
     let steps = 1
     let queueOfValves = rawValves.find(v => v.id === start).rawNeighbours
     while (queueOfValves.length > 0) {
-        if (queueOfValves.includes(target)) return steps
+        if (queueOfValves.includes(target)) return steps + 1 // the +1 is for the time it takes to open a valve
         steps++
         queueOfValves = queueOfValves.map(v => rawValves.find(_ => _.id === v).rawNeighbours.filter(t => !visited.has(t))).flat()
         queueOfValves.forEach(t => visited.add(t))
@@ -118,8 +118,6 @@ export function findMinimalDistance(start: string, target: string, rawValves: Ra
 export async function maximizePressureReleaseWithElephant(valves: Valves, start: string = "AA", rounds = 26) {
 
     // const closedValvesWithFlow = new Set([...valves.values()].filter(v => v.flow > 0 && !v.open).map(v => v.valve))
-
-    const finalStates: State[] = []
     const limit = Object.keys(valves).length - 1
     let counter = 0
 
@@ -150,11 +148,11 @@ export async function maximizePressureReleaseWithElephant(valves: Valves, start:
         for await (const stateStr of lineReader) {
             const advancedState = advanceHeroAndElephant(valves, JSON.parse(stateStr))
             advancedState.forEach(s => {
-                const [hero, elephant] = s;
-                if (hero || elephant) {
-                    outputFile.write(JSON.stringify(s) + "\n");
-                } else {
+                const roundsLeft = s[5];
+                if (roundsLeft === 0) {
                     finalFile.write(JSON.stringify(s) + "\n");
+                } else {
+                    outputFile.write(JSON.stringify(s) + "\n");
                 }
             })
         }
@@ -206,132 +204,100 @@ export function initializeElephantState(valves: Valves, start: string = "AA", ro
     return states
 }
 
-function getWater(valves: Valves, hero: [current: string, next: string, distance: number], flow: number, released: number, roundsLeft: number): [number, number, number] {
-    const roundsPassed = hero[2] + 1 // +1 for opening the current valve(s)
-    roundsLeft -= roundsPassed
-    released += flow * roundsPassed
-    flow += valves[hero[1]].flow // opens valve
-    return [flow, released, roundsLeft]
-}
-
 export function advanceHeroAndElephant(valves: Valves, state: State): State[] {
     const [hero, elephant, unvisited, flow, released, roundsLeft] = state;
 
-    const isLastMove = !elephant
-    const [heroPos, heroTarget, heroDist] = hero;
+    const roundsPassed = hero[2] <= elephant[2] ? hero[2] : elephant[2]
+    const _roundsLeft = roundsLeft - roundsPassed
+    const _released = released + (flow * roundsPassed)
 
-    if (isLastMove) {
-        const water = getWater(valves, hero, flow, released, roundsLeft);
-        return [[undefined, undefined, [], ...water]]
-    }
+    // filter for unvisited valves that are actually reachable in the rounds Left
+    const _unvisited = unvisited.filter(v =>
+        valves[hero[1]].paths[v] <= _roundsLeft || valves[elephant[1]].paths[v] <= _roundsLeft)
 
-    const [elephantPos, elephantTarget, elephantDist] = elephant;
-
-    const isAtLeastOneTargetLeft = unvisited.length >= 1
-    const isOneTargetLeft = unvisited.length === 1
-    const areManyTargetsLeft = unvisited.length > 1
+    const [, heroTarget, heroDist] = hero
+    const [, elephantTarget, elephantDist] = elephant
 
     const isHeroAtTarget = heroDist <= elephantDist
     const isElephantAtTarget = heroDist >= elephantDist
+    const areBothAtTarget = isHeroAtTarget && isElephantAtTarget
 
-    if (isHeroAtTarget && isElephantAtTarget) {
-        const roundsPassed = heroDist + 1 // +1 for opening the current valve(s)
-        // roundsLeft -= roundsPassed
-        // released += flow * roundsPassed
-        // flow += valves[heroTarget].flow + valves[elephantTarget].flow // opens valve
+    const isOneTargetLeft = unvisited.length === 1
+    const isAtLeastOneTargetLeft = unvisited.length >= 1
+    const areManyTargetsLeft = unvisited.length > 1
+
+
+    if (areBothAtTarget) {
+        const _heroPos = heroTarget
+        const _elephantPos = elephantTarget
+        let _flow = flow + valves[_heroPos].flow + valves[_elephantPos].flow;
 
         if (areManyTargetsLeft) {
+            // keeps going at least one more round
             return combineAllUnvisited(
                 valves,
                 heroTarget,
                 elephantTarget,
-                unvisited,
-                flow + valves[heroTarget].flow + valves[elephantTarget].flow,
+                _unvisited,
+                _flow,
                 released + (flow * roundsPassed),
-                roundsLeft - roundsPassed
+                _roundsLeft
             )
-        } else if (
-            isOneTargetLeft &&
-            ((valves[heroTarget].paths[unvisited[0]] + 1 < roundsLeft) ||
-                (valves[elephantTarget].paths[unvisited[0]] + 1 < roundsLeft))
-        ) {
-            return targetLastUnvisited(
-                valves,
-                heroTarget,
-                elephantTarget,
-                unvisited,
-                flow + valves[heroTarget].flow + valves[elephantTarget].flow,
-                released + (flow * roundsPassed),
-                roundsLeft - roundsPassed);
-        } else {
-            return [[undefined, undefined, [], flow, released, roundsLeft]]
-        }
-    } else if (isHeroAtTarget) {
-        const roundsPassed = heroDist + 1 // +1 for opening the current valve(s)
-        const _roundsLeft = roundsLeft - roundsPassed
+        } else if (isOneTargetLeft) {
+            const [lastTarget] = _unvisited
+            const heroDistToLastTarget = valves[_heroPos].paths[lastTarget]
+            const elephantDistToLastTarget = valves[_elephantPos].paths[lastTarget]
+            const _roundsPassed = Math.min(heroDistToLastTarget, elephantDistToLastTarget)
 
-        // opens valve
+            // opens last valve, is then flagged as finished
+            const finalRoundsLeft = _roundsLeft - _roundsPassed
+            const finalFlow = _flow + valves[lastTarget].flow
+            const finalReleased = _released + _roundsPassed * _flow + finalRoundsLeft * finalFlow
+            return [[undefined, undefined, [], finalFlow, finalReleased, 0]]
+        } else {
+            // is flagged as finished
+            const finalRoundsLeft = _roundsLeft
+            const finalFlow = _flow
+            const finalReleased = _released + finalRoundsLeft * finalFlow
+            return [[undefined, undefined, [], finalFlow, finalReleased, 0]]
+        }
+    } else if (isHeroAtTarget || isElephantAtTarget) {
+        const charAtTarget = isHeroAtTarget ? hero : elephant
+        const charB = !isHeroAtTarget ? hero : elephant
+        const [, _pos] = charAtTarget // the _ denotes the current position (former target)
+        const _flow = flow + valves[_pos].flow
+
         if (isAtLeastOneTargetLeft) {
+            const [posB, targetB] = charB
+            const distB = charB[2] - roundsPassed
             const states = []
-            for (let i = 0; i < unvisited.length; i++) {
-                const newHeroPos = heroTarget
-                const newHeroTarget = unvisited[i]
-                const heroDistance = valves[newHeroPos].paths[newHeroTarget];
-                if (heroDistance > _roundsLeft)
-                    continue;
-                const _hero: CharState = [newHeroPos, newHeroTarget, heroDistance]
-                const _elephant: CharState = [elephantPos, elephantTarget, elephantDist - roundsPassed]
+            for (let i = 0; i < _unvisited.length; i++) {
+
+                const _target = _unvisited[i]
+                const _dist = valves[_pos].paths[_target];
+
                 states.push([
-                    _hero,
-                    _elephant,
-                    unvisited.filter(t => t !== newHeroTarget),
-                    flow + valves[heroTarget].flow,
-                    released + (flow * roundsPassed),
+                    [_pos, _target, _dist],
+                    [posB, targetB, distB],
+                    unvisited.filter(t => t !== _target),
+                    _flow,
+                    _released,
                     _roundsLeft
                 ])
             }
             return states
-
         } else {
-            return [[undefined, undefined, [], flow, released, roundsLeft]]
-        }
-    } else if (isElephantAtTarget) {
-        const roundsPassed = elephantDist + 1 // +1 for opening the current valve(s)
-        const _roundsLeft = roundsLeft - roundsPassed
-        const _released = released + (flow * roundsPassed)
-        const _flow = flow + valves[elephantTarget].flow // opens valve
-        if (isAtLeastOneTargetLeft) {
-            const states = []
-            for (let i = 0; i < unvisited.length; i++) {
-                const newElephantPos = elephantTarget
-                const newElephantTarget = unvisited[i]
-                const _hero: CharState = [heroPos, heroTarget, heroDist - roundsPassed]
-                const elephantDistance = valves[newElephantPos].paths[newElephantTarget];
-                if (elephantDistance > _roundsLeft)
-                    continue;
-                const _elephant: CharState =
-                    [newElephantPos, newElephantTarget, elephantDistance]
-                const _unvisited = unvisited.filter(t => t !== newElephantTarget)
-                states.push([_hero, _elephant, _unvisited, _flow, _released, _roundsLeft])
-            }
-            return states
+            const [, _posB] = charB
+            const _roundsPassed = charB[2] - roundsPassed
+            // open last two valves, is then flagged as finished
+            // charB walks to their target as well
+            const finalRoundsLeft = _roundsLeft - _roundsPassed
+            const finalFlow = _flow + valves[_posB].flow // opens last valve
+            const finalReleased = _released + (_roundsPassed * _flow) + finalRoundsLeft * finalFlow
 
-        } else {
-            const _hero: CharState = [heroPos, heroTarget, heroDist - roundsPassed]
-            return [[_hero, undefined, [], _flow, _released, _roundsLeft]]
+            return [[undefined, undefined, [], finalFlow, finalReleased, 0]]
         }
     }
-}
-
-function targetLastUnvisited(valves: Valves, heroTarget: string, elephantTarget: string, unvisited: string[], flow: number, released: number, roundsLeft: number): State[] {
-    const [lastTarget] = unvisited
-    const heroDistToLastTarget = valves[heroTarget].paths[lastTarget]
-    const elephantDistToLastTarget = valves[elephantTarget].paths[lastTarget]
-    const heroIsCloser = heroDistToLastTarget < elephantDistToLastTarget
-    const movingChar: CharState = heroIsCloser ?
-        [heroTarget, lastTarget, heroDistToLastTarget] :
-        [elephantTarget, lastTarget, elephantDistToLastTarget]
-    return [[movingChar, undefined, [], flow, released, roundsLeft]]
 }
 
 function combineAllUnvisited(valves: Valves, heroTarget: string, elephantTarget: string, unvisited: string[], flow: number, released: number, roundsLeft: number) {
