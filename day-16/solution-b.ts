@@ -7,6 +7,9 @@
 * - a number of edges with weights connecting it to other Valves
 */
 
+import * as fs from "fs";
+import * as readline from "readline";
+
 type RawValve = {
     id: string,
     flow: number,
@@ -67,13 +70,6 @@ type State = [
 * the formula for the memory complexity appears to be very dynamic, but peaks around the 6th advancement of states with 14 nodes
 * */
 
-// const testInput = fs.readFileSync('test_input.txt', 'utf-8');
-// // const testValves: Map<string, Valve> = parse(testInput)
-// const testValves = parseToObject(testInput)
-// // console.log(JSON.stringify(testValves, null, 1))
-// const rel = maximizePressureReleaseWithElephant(testValves)
-
-// console.log(rel)
 export function parseToObject(input): Valves {
     const rawValves: RawValve[] = input.split('\n')
         .map((line) => {
@@ -119,47 +115,78 @@ export function findMinimalDistance(start: string, target: string, rawValves: Ra
 }
 
 
-export function maximizePressureReleaseWithElephant(valves: Valves, start: string = "AA", rounds = 26) {
+export async function maximizePressureReleaseWithElephant(valves: Valves, start: string = "AA", rounds = 26) {
 
     // const closedValvesWithFlow = new Set([...valves.values()].filter(v => v.flow > 0 && !v.open).map(v => v.valve))
 
     const finalStates: State[] = []
-    let queue: State[] = initializeElephantState(valves, start, rounds)
-    let counter = Object.keys(valves).length - 1
+    const limit = Object.keys(valves).length - 1
+    let counter = 0
 
-    console.log("queue is now " + queue.length + " long.")
-    console.log(queue[0] ?? "Nothing in the queue.")
+    const fileStr = initializeElephantState(valves, start, rounds).reduce((str, line) => str + JSON.stringify(line) + "\n", "")
 
-    while (counter > 0 && queue.length > 0) {
-        counter--
-        const buffer = []
-        for (const state of queue) {
-            const newStates: State[] = advanceHeroAndElephant(valves, state)
+    fs.rmSync(`./buffer/${counter}_state`)
+    fs.writeFileSync(`./buffer/${counter}_state`, fileStr)
 
-            for (const newState of newStates) {
-                const [hero, elephant] = newState;
-                if (hero || elephant) {
-                    buffer.push(newState)
-                } else {
-                    finalStates.push(newState)
-                }
-            }
-        }
-        queue = buffer
-        console.log("queue is now " + queue.length + " long.")
-        // writeHeapSnapshot(`./heapdumps/${Date.now()}_${valves.size - counter - 1}.heapsnapshot`)
-        // console.log("dumped heap.")
-        console.log(queue[0] ?? "Nothing in the queue.")
+    fs.rmSync(`./buffer/final_state`)
+    const finalFile = fs.createWriteStream(`./buffer/final_state`);
+
+    while (counter < limit) {
+        if (fs.existsSync(`./buffer/${counter + 1}_state`))
+            fs.rmSync(`./buffer/${counter + 1}_state`)
+        counter++
     }
 
-    finalStates.push(...queue)
+    counter = 0
+    while (counter < limit) {
+        const inputFile = fs.createReadStream(`./buffer/${counter}_state`);
+        const outputFile = fs.createWriteStream(`./buffer/${counter + 1}_state`);
 
-    const pressures = finalStates.map(([, , , flow, released, roundsLeft]) => released + (flow * roundsLeft))
-    const [maxPressure] = [...pressures].sort((a, b) => b - a)
-    return maxPressure
+        const lineReader = readline.createInterface({
+            input: inputFile,
+            crlfDelay: Infinity
+        });
+
+        for await (const stateStr of lineReader) {
+            const advancedState = advanceHeroAndElephant(valves, JSON.parse(stateStr))
+            advancedState.forEach(s => {
+                const [hero, elephant] = s;
+                if (hero || elephant) {
+                    outputFile.write(JSON.stringify(s) + "\n");
+                } else {
+                    finalFile.write(JSON.stringify(s) + "\n");
+                }
+            })
+        }
+
+        inputFile.close()
+        outputFile.close()
+        console.log(`wrote file ./buffer/${counter + 1}_state`)
+        counter++
+    }
+
+    finalFile.close()
+
+    let max = 0
+    const resultFile = fs.createReadStream(`./buffer/final_state`);
+    const lineReader = readline.createInterface({
+        input: resultFile,
+        crlfDelay: Infinity
+    });
 
 
+    for await (const stateStr of lineReader) {
+        const [, , , flow, released, roundsLeft] = JSON.parse(stateStr)
+        const pressureReleased = released + (flow * roundsLeft)
+        if (max < pressureReleased) {
+            max = pressureReleased
+        }
+    }
+    fs.writeFileSync(`./buffer/result`, max.toString())
+
+    return max
 }
+
 export function initializeElephantState(valves: Valves, start: string = "AA", rounds: number = 26) {
 
     const states: State[] = []
@@ -178,78 +205,90 @@ export function initializeElephantState(valves: Valves, start: string = "AA", ro
     }
     return states
 }
-export function advanceHeroAndElephant(valves: Valves, state: State): State[] {
-    let [hero, elephant, unvisited, flow, released, roundsLeft] = state;
-    const isElephantFinished = !elephant
-    const isAtLeastOneTargetLeft = unvisited.length >= 1
-    const areManyTargetsLeft = unvisited.length > 1
 
+function getWater(valves: Valves, hero: [current: string, next: string, distance: number], flow: number, released: number, roundsLeft: number): [number, number, number] {
+    const roundsPassed = hero[2] + 1 // +1 for opening the current valve(s)
+    roundsLeft -= roundsPassed
+    released += flow * roundsPassed
+    flow += valves[hero[1]].flow // opens valve
+    return [flow, released, roundsLeft]
+}
+
+export function advanceHeroAndElephant(valves: Valves, state: State): State[] {
+    const [hero, elephant, unvisited, flow, released, roundsLeft] = state;
+
+    const isLastMove = !elephant
     const [heroPos, heroTarget, heroDist] = hero;
 
-    if(isElephantFinished){
-        const roundsPassed = heroDist + 1 // +1 for opening the current valve(s)
-        roundsLeft -= roundsPassed
-        released += flow * roundsPassed
-        flow += valves[heroTarget].flow // opens valve
-        return [[undefined, undefined, [], flow, released, roundsLeft]]
+    if (isLastMove) {
+        const water = getWater(valves, hero, flow, released, roundsLeft);
+        return [[undefined, undefined, [], ...water]]
     }
 
     const [elephantPos, elephantTarget, elephantDist] = elephant;
+
+    const isAtLeastOneTargetLeft = unvisited.length >= 1
+    const isOneTargetLeft = unvisited.length === 1
+    const areManyTargetsLeft = unvisited.length > 1
 
     const isHeroAtTarget = heroDist <= elephantDist
     const isElephantAtTarget = heroDist >= elephantDist
 
     if (isHeroAtTarget && isElephantAtTarget) {
         const roundsPassed = heroDist + 1 // +1 for opening the current valve(s)
-        roundsLeft -= roundsPassed
-        released += flow * roundsPassed
-        flow += valves[heroTarget].flow + valves[elephantTarget].flow // opens valve
+        // roundsLeft -= roundsPassed
+        // released += flow * roundsPassed
+        // flow += valves[heroTarget].flow + valves[elephantTarget].flow // opens valve
 
         if (areManyTargetsLeft) {
-            const states = []
-            for (let i = 0; i < unvisited.length; i++) {
-                const newHeroPos = heroTarget
-                const newHeroTarget = unvisited[i]
-                const _hero: CharState =
-                    [newHeroPos, newHeroTarget, valves[newHeroPos].paths[newHeroTarget]]
-
-                for (let j = 0; j < unvisited.length; j++) {
-                    if(unvisited[i] === unvisited[j]) continue;
-                    const newElephantPos = elephantTarget
-                    const newElephantTarget = unvisited[j];
-                    const _elephant: CharState =
-                        [newElephantPos, newElephantTarget, valves[newElephantPos].paths[newElephantTarget]]
-                    const _unvisited = unvisited.filter(t => t !== newHeroTarget && t !== newElephantTarget)
-                    states.push([_hero, _elephant, _unvisited, flow, released, roundsLeft])
-                }
-            }
-            return states
-
-        } else if (isAtLeastOneTargetLeft) {
-            const heroDistToLastTarget = valves[heroTarget].paths[unvisited[0]]
-            const elephantDistToLastTarget = valves[elephantTarget].paths[unvisited[0]]
-            const heroIsCloser = heroDistToLastTarget < elephantDistToLastTarget
-            const movingChar: CharState = heroIsCloser ?
-                [heroTarget, unvisited[0], heroDistToLastTarget] :
-                [elephantTarget, unvisited[0], elephantDistToLastTarget]
-            return [[movingChar, undefined, [], flow, released, roundsLeft]]
+            return combineAllUnvisited(
+                valves,
+                heroTarget,
+                elephantTarget,
+                unvisited,
+                flow + valves[heroTarget].flow + valves[elephantTarget].flow,
+                released + (flow * roundsPassed),
+                roundsLeft - roundsPassed
+            )
+        } else if (
+            isOneTargetLeft &&
+            ((valves[heroTarget].paths[unvisited[0]] + 1 < roundsLeft) ||
+                (valves[elephantTarget].paths[unvisited[0]] + 1 < roundsLeft))
+        ) {
+            return targetLastUnvisited(
+                valves,
+                heroTarget,
+                elephantTarget,
+                unvisited,
+                flow + valves[heroTarget].flow + valves[elephantTarget].flow,
+                released + (flow * roundsPassed),
+                roundsLeft - roundsPassed);
         } else {
             return [[undefined, undefined, [], flow, released, roundsLeft]]
         }
     } else if (isHeroAtTarget) {
         const roundsPassed = heroDist + 1 // +1 for opening the current valve(s)
-        roundsLeft -= roundsPassed
-        released += flow * roundsPassed
-        flow += valves[heroTarget].flow // opens valve
+        const _roundsLeft = roundsLeft - roundsPassed
+
+        // opens valve
         if (isAtLeastOneTargetLeft) {
             const states = []
             for (let i = 0; i < unvisited.length; i++) {
                 const newHeroPos = heroTarget
                 const newHeroTarget = unvisited[i]
-                const _hero: CharState = [newHeroPos, newHeroTarget, valves[newHeroPos].paths[newHeroTarget]]
+                const heroDistance = valves[newHeroPos].paths[newHeroTarget];
+                if (heroDistance > _roundsLeft)
+                    continue;
+                const _hero: CharState = [newHeroPos, newHeroTarget, heroDistance]
                 const _elephant: CharState = [elephantPos, elephantTarget, elephantDist - roundsPassed]
-                const _unvisited = unvisited.filter(t => t !== newHeroTarget)
-                states.push([_hero, _elephant, _unvisited, flow, released, roundsLeft])
+                states.push([
+                    _hero,
+                    _elephant,
+                    unvisited.filter(t => t !== newHeroTarget),
+                    flow + valves[heroTarget].flow,
+                    released + (flow * roundsPassed),
+                    _roundsLeft
+                ])
             }
             return states
 
@@ -258,24 +297,68 @@ export function advanceHeroAndElephant(valves: Valves, state: State): State[] {
         }
     } else if (isElephantAtTarget) {
         const roundsPassed = elephantDist + 1 // +1 for opening the current valve(s)
-        roundsLeft -= roundsPassed
-        released += flow * roundsPassed
-        flow += valves[elephantTarget].flow // opens valve
+        const _roundsLeft = roundsLeft - roundsPassed
+        const _released = released + (flow * roundsPassed)
+        const _flow = flow + valves[elephantTarget].flow // opens valve
         if (isAtLeastOneTargetLeft) {
             const states = []
             for (let i = 0; i < unvisited.length; i++) {
                 const newElephantPos = elephantTarget
                 const newElephantTarget = unvisited[i]
                 const _hero: CharState = [heroPos, heroTarget, heroDist - roundsPassed]
-                const _elephant: CharState = [newElephantPos, newElephantTarget, valves[newElephantPos].paths[newElephantTarget]]
+                const elephantDistance = valves[newElephantPos].paths[newElephantTarget];
+                if (elephantDistance > _roundsLeft)
+                    continue;
+                const _elephant: CharState =
+                    [newElephantPos, newElephantTarget, elephantDistance]
                 const _unvisited = unvisited.filter(t => t !== newElephantTarget)
-                states.push([_hero, _elephant, _unvisited, flow, released, roundsLeft])
+                states.push([_hero, _elephant, _unvisited, _flow, _released, _roundsLeft])
             }
             return states
 
         } else {
             const _hero: CharState = [heroPos, heroTarget, heroDist - roundsPassed]
-            return [[_hero, undefined, [], flow, released, roundsLeft]]
+            return [[_hero, undefined, [], _flow, _released, _roundsLeft]]
         }
     }
 }
+
+function targetLastUnvisited(valves: Valves, heroTarget: string, elephantTarget: string, unvisited: string[], flow: number, released: number, roundsLeft: number): State[] {
+    const [lastTarget] = unvisited
+    const heroDistToLastTarget = valves[heroTarget].paths[lastTarget]
+    const elephantDistToLastTarget = valves[elephantTarget].paths[lastTarget]
+    const heroIsCloser = heroDistToLastTarget < elephantDistToLastTarget
+    const movingChar: CharState = heroIsCloser ?
+        [heroTarget, lastTarget, heroDistToLastTarget] :
+        [elephantTarget, lastTarget, elephantDistToLastTarget]
+    return [[movingChar, undefined, [], flow, released, roundsLeft]]
+}
+
+function combineAllUnvisited(valves: Valves, heroTarget: string, elephantTarget: string, unvisited: string[], flow: number, released: number, roundsLeft: number) {
+    const states = []
+    for (let i = 0; i < unvisited.length; i++) {
+        const newHeroPos = heroTarget
+        const newHeroTarget = unvisited[i]
+        const heroDistance = valves[newHeroPos].paths[newHeroTarget];
+        if (heroDistance > roundsLeft) continue;
+        const _hero: CharState =
+            [newHeroPos, newHeroTarget, heroDistance]
+
+        for (let j = 0; j < unvisited.length; j++) {
+            if (unvisited[i] === unvisited[j])
+                continue;
+            const newElephantPos = elephantTarget
+            const newElephantTarget = unvisited[j];
+            const elephantDistance = valves[newElephantPos].paths[newElephantTarget];
+            if (elephantDistance > roundsLeft)
+                continue;
+            const _elephant: CharState =
+                [newElephantPos, newElephantTarget, elephantDistance]
+            const _unvisited = unvisited.filter(t => t !== newHeroTarget && t !== newElephantTarget)
+            states.push([_hero, _elephant, _unvisited, flow, released, roundsLeft])
+        }
+    }
+    return states;
+}
+
+

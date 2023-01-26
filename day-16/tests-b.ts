@@ -8,25 +8,30 @@ import {
 
 const testInput = fs.readFileSync('test_input.txt', 'utf-8');
 const testValves = parseToObject(testInput)
-console.log(JSON.stringify(testValves, null, 2))
-const rel = maximizePressureReleaseWithElephant(testValves)
+const rel = await maximizePressureReleaseWithElephant(testValves, "AA", 15)
 console.log(rel)
 console.log()
+//
+// const input = fs.readFileSync('input.txt', 'utf-8');
+// const valves = parseToObject(input)
+// const rel_final = await maximizePressureReleaseWithElephant(valves)
+// console.log(rel_final)
+// console.log() // 2587 was TOO LOW
 
-const input = fs.readFileSync('input.txt', 'utf-8');
-const valves = parseToObject(input)
+
+
 // console.log(maximizePressureReleaseWithElephant(valves, 'AA'))
 
 // console.log()
 // console.log("UNIT TESTS")
 //
-const afterFirstElephantMove = initializeElephantState(testValves);
+// const afterFirstElephantMove = initializeElephantState(testValves);
 // console.log(afterFirstElephantMove)
-const firstElephantState = afterFirstElephantMove
-    .find(([[,heroTarget], [,elephantTarget]]) =>
-        [heroTarget, elephantTarget].includes('DD') && [heroTarget, elephantTarget].includes('JJ')
-    )
-console.log(JSON.stringify(firstElephantState))
+// const firstElephantState = afterFirstElephantMove
+//     .find(([[,heroTarget], [,elephantTarget]]) =>
+//         [heroTarget, elephantTarget].includes('DD') && [heroTarget, elephantTarget].includes('JJ')
+//     )
+// console.log(JSON.stringify(firstElephantState))
 //
 // const afterSecondElephantMove = advanceHeroAndElephant(testValves, firstElephantState);
 // const secondElephantState = afterSecondElephantMove

@@ -4,14 +4,13 @@ import {Transform} from "stream";
 
 import readline from "readline";
 import {advanceHeroAndElephant} from "./solution-b.js";
+
 fs.createReadStream("./state", {});
-const transformedData= fs.createWriteStream("./advancedState");
+const transformedData = fs.createWriteStream("./advancedState");
 
 const uppercase = new Transform({
     objectMode: true,
-    transform(chunk, encoding, callback) {
-        callback(null, chunk.toString().toUpperCase());
-    },
+    transform: (chunk, encoding, callback) => callback(null, chunk.toString().toUpperCase()),
 });
 
 // fileStream.pipe(uppercase).pipe(transformedData);
@@ -119,4 +118,29 @@ async function processLineByLine() {
     }
 }
 
-processLineByLine();
+// processLineByLine();
+
+
+let max = 0
+const resultFile = fs.createReadStream(`./buffer/final_state`);
+const lineReader = readline.createInterface({
+    input: resultFile,
+    crlfDelay: Infinity
+});
+
+
+for await (const stateStr of lineReader) {
+    const [, , , flow, released, roundsLeft] = JSON.parse(stateStr)
+    let pressureReleased
+    if (roundsLeft >= 0) {
+        pressureReleased = released + (flow * roundsLeft)
+    }
+    else {
+        pressureReleased = released - (flow * Math.abs(roundsLeft))
+    }
+    if (max < pressureReleased) {
+        max = pressureReleased
+    }
+}
+// fs.writeFileSync(`./buffer/15_state`, max.toString())
+console.log(max)
