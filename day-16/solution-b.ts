@@ -119,6 +119,10 @@ export async function maximizePressureReleaseWithElephant(valves: Valves, start:
 
     // const closedValvesWithFlow = new Set([...valves.values()].filter(v => v.flow > 0 && !v.open).map(v => v.valve))
     const limit = Object.keys(valves).length - 1
+    const maxFlow = Object.values(valves).map((v) => v.flow).reduce((max, flow) => (max + flow), 0)
+
+    console.log(`maxFlow is ${maxFlow}`)
+
     let counter = 0
 
     const fileStr = initializeElephantState(valves, start, rounds).reduce((str, line) => str + JSON.stringify(line) + "\n", "")
@@ -126,8 +130,8 @@ export async function maximizePressureReleaseWithElephant(valves: Valves, start:
     fs.rmSync(`./buffer/${counter}_state`)
     fs.writeFileSync(`./buffer/${counter}_state`, fileStr)
 
-    fs.rmSync(`./buffer/final_state`)
-    const finalFile = fs.createWriteStream(`./buffer/final_state`);
+    // fs.rmSync(`./buffer/final_state`)
+    // const finalFile = fs.createWriteStream(`./buffer/final_state`);
 
     while (counter < limit) {
         if (fs.existsSync(`./buffer/${counter + 1}_state`))
@@ -135,6 +139,7 @@ export async function maximizePressureReleaseWithElephant(valves: Valves, start:
         counter++
     }
 
+    let max = 0
     counter = 0
     while (counter < limit) {
         const inputFile = fs.createReadStream(`./buffer/${counter}_state`);
@@ -149,8 +154,19 @@ export async function maximizePressureReleaseWithElephant(valves: Valves, start:
             const advancedState = advanceHeroAndElephant(valves, JSON.parse(stateStr))
             advancedState.forEach(s => {
                 const roundsLeft = s[5];
+                const pressureReleased = s[4];
+                const flow = s[3];
+                if (flow > maxFlow) {
+                    console.log(`maxFlow overstepped: ${JSON.stringify(s)}`)
+                    return
+                }
                 if (roundsLeft === 0) {
-                    finalFile.write(JSON.stringify(s) + "\n");
+                    // finalFile.write(JSON.stringify(s) + "\n");
+                    if (pressureReleased > max) {
+                        max = pressureReleased
+                        console.log(`updated max: ${JSON.stringify(s)}`)
+                        fs.writeFileSync(`./buffer/result`, JSON.stringify(s))
+                    }
                 } else {
                     outputFile.write(JSON.stringify(s) + "\n");
                 }
@@ -162,25 +178,6 @@ export async function maximizePressureReleaseWithElephant(valves: Valves, start:
         console.log(`wrote file ./buffer/${counter + 1}_state`)
         counter++
     }
-
-    finalFile.close()
-
-    let max = 0
-    const resultFile = fs.createReadStream(`./buffer/final_state`);
-    const lineReader = readline.createInterface({
-        input: resultFile,
-        crlfDelay: Infinity
-    });
-
-
-    for await (const stateStr of lineReader) {
-        const [, , , flow, released, roundsLeft] = JSON.parse(stateStr)
-        const pressureReleased = released + (flow * roundsLeft)
-        if (max < pressureReleased) {
-            max = pressureReleased
-        }
-    }
-    fs.writeFileSync(`./buffer/result`, max.toString())
 
     return max
 }
@@ -215,6 +212,12 @@ export function advanceHeroAndElephant(valves: Valves, state: State): State[] {
     const _unvisited = unvisited.filter(v =>
         valves[hero[1]].paths[v] <= _roundsLeft || valves[elephant[1]].paths[v] <= _roundsLeft)
 
+/*    const minDistance = Object.values(valves)
+        .filter(valve => _unvisited.includes(valve.id))
+        .map((v) => Object.values(v.paths)
+            .reduce((min, dist) => dist < min ? dist : min, 0))
+        .reduce((min, dist) => dist < min ? dist : min, 0)*/
+
     const [, heroTarget, heroDist] = hero
     const [, elephantTarget, elephantDist] = elephant
 
@@ -222,9 +225,9 @@ export function advanceHeroAndElephant(valves: Valves, state: State): State[] {
     const isElephantAtTarget = heroDist >= elephantDist
     const areBothAtTarget = isHeroAtTarget && isElephantAtTarget
 
-    const isOneTargetLeft = unvisited.length === 1
-    const isAtLeastOneTargetLeft = unvisited.length >= 1
-    const areManyTargetsLeft = unvisited.length > 1
+    const isOneTargetLeft = _unvisited.length === 1
+    const isAtLeastOneTargetLeft = _unvisited.length >= 1
+    const areManyTargetsLeft = _unvisited.length > 1
 
 
     if (areBothAtTarget) {
