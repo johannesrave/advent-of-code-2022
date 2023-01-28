@@ -117,7 +117,6 @@ export function findMinimalDistance(start: string, target: string, rawValves: Ra
 
 export async function maximizePressureReleaseWithElephant(valves: Valves, start: string = "AA", rounds = 26) {
 
-    // const closedValvesWithFlow = new Set([...valves.values()].filter(v => v.flow > 0 && !v.open).map(v => v.valve))
     const limit = Object.keys(valves).length - 1
     const maxFlow = Object.values(valves).map((v) => v.flow).reduce((max, flow) => (max + flow), 0)
 
@@ -129,9 +128,6 @@ export async function maximizePressureReleaseWithElephant(valves: Valves, start:
 
     fs.rmSync(`./buffer/${counter}_state`)
     fs.writeFileSync(`./buffer/${counter}_state`, fileStr)
-
-    // fs.rmSync(`./buffer/final_state`)
-    // const finalFile = fs.createWriteStream(`./buffer/final_state`);
 
     while (counter < limit) {
         if (fs.existsSync(`./buffer/${counter + 1}_state`))
@@ -156,12 +152,7 @@ export async function maximizePressureReleaseWithElephant(valves: Valves, start:
                 const roundsLeft = s[5];
                 const pressureReleased = s[4];
                 const flow = s[3];
-                if (flow > maxFlow) {
-                    console.log(`maxFlow overstepped: ${JSON.stringify(s)}`)
-                    return
-                }
                 if (roundsLeft === 0) {
-                    // finalFile.write(JSON.stringify(s) + "\n");
                     if (pressureReleased > max) {
                         max = pressureReleased
                         console.log(`updated max: ${JSON.stringify(s)}`)
